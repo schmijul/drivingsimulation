@@ -1,15 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "g4v1EDv+N8qDv2i5UgVezQE1U0eQ3qznJYgNRsEabA4SQA/aR9sSGubcaukdNL/kgXU2bir+IvkESuqxeNSpQA==",
+  "dgSpecHash": "7X4ohfiOAVFQMjTDbxRhFp4t+YneZv2eHzwpWfqH1d8M9HbenA8IDEWS0h6xBKAo+ZBURhIguW2wl8fhW22rZQ==",
   "success": true,
-  "projectFilePath": "/home/schmijul/SelfDrivingSimulation/SelfDrivingSimulation.csproj",
+  "projectFilePath": "/home/schmijul/drivingsimulation/SelfDrivingSimulation.csproj",
   "expectedPackageFiles": [
-    "/home/schmijul/.nuget/packages/csfml/2.6.1/csfml.2.6.1.nupkg.sha512",
-    "/home/schmijul/.nuget/packages/sfml.audio/2.6.0/sfml.audio.2.6.0.nupkg.sha512",
-    "/home/schmijul/.nuget/packages/sfml.graphics/2.6.0/sfml.graphics.2.6.0.nupkg.sha512",
-    "/home/schmijul/.nuget/packages/sfml.net/2.6.0/sfml.net.2.6.0.nupkg.sha512",
-    "/home/schmijul/.nuget/packages/sfml.system/2.6.0/sfml.system.2.6.0.nupkg.sha512",
-    "/home/schmijul/.nuget/packages/sfml.window/2.6.0/sfml.window.2.6.0.nupkg.sha512"
+    "/home/schmijul/.nuget/packages/csfml/2.5.0/csfml.2.5.0.nupkg.sha512",
+    "/home/schmijul/.nuget/packages/sfml.audio/2.5.0/sfml.audio.2.5.0.nupkg.sha512",
+    "/home/schmijul/.nuget/packages/sfml.graphics/2.5.0/sfml.graphics.2.5.0.nupkg.sha512",
+    "/home/schmijul/.nuget/packages/sfml.net/2.5.0/sfml.net.2.5.0.nupkg.sha512",
+    "/home/schmijul/.nuget/packages/sfml.system/2.5.0/sfml.system.2.5.0.nupkg.sha512",
+    "/home/schmijul/.nuget/packages/sfml.window/2.5.0/sfml.window.2.5.0.nupkg.sha512"
   ],
   "logs": []
 }

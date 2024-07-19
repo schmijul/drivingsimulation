@@ -1,73 +1,38 @@
-﻿using SFML.Graphics;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using System.Threading.Tasks;
+using SFML.Graphics;
 using SFML.Window;
 using SFML.System;
 
-class Program
+namespace SelfDrivingSimulation
 {
-    static void Main(string[] args)
+    class Program
     {
-        var window = new RenderWindow(new VideoMode(800, 600), "2D Self-Driving Simulation");
-        window.Closed += (sender, e) => window.Close();
-
-        var vehicle = new Vehicle(400, 300);
-
-        while (window.IsOpen)
+        static async Task Main(string[] args)
         {
-            window.DispatchEvents();
+            var builder = WebApplication.CreateBuilder(args);
 
-            // Handle input
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Up))
-                vehicle.Speed = 2;
-            else if (Keyboard.IsKeyPressed(Keyboard.Key.Down))
-                vehicle.Speed = -2;
-            else
-                vehicle.Speed = 0;
+            // Add services to the container.
+            builder.Services.AddControllers();
+            builder.Services.AddSingleton<Vehicle>();
+            builder.Services.AddSingleton<VehicleController>();
+            builder.Services.AddSingleton<Simulation>();
 
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Left))
-                vehicle.Angle += 2;
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Right))
-                vehicle.Angle -= 2;
+            var app = builder.Build();
 
-            vehicle.Move();
+            // Configure the HTTP request pipeline.
+            app.UseHttpsRedirection();
+            app.UseAuthorization();
+            app.MapControllers();
 
-            window.Clear(Color.White);
-            vehicle.Draw(window);
-            window.Display();
+            // Run the API server
+            _ = app.RunAsync();
+
+            // Run the simulation
+            var simulation = app.Services.GetRequiredService<Simulation>();
+            simulation.Run();
         }
-    }
-}
-
-class Vehicle
-{
-    public float X { get; set; }
-    public float Y { get; set; }
-    public float Angle { get; set; }
-    public float Speed { get; set; }
-
-    private CircleShape shape;
-
-    public Vehicle(float x, float y)
-    {
-        X = x;
-        Y = y;
-        Angle = 0;
-        Speed = 0;
-
-        shape = new CircleShape(10)
-        {
-            FillColor = Color.Red
-        };
-    }
-
-    public void Move()
-    {
-        X += Speed * (float)Math.Cos(Angle * Math.PI / 180);
-        Y -= Speed * (float)Math.Sin(Angle * Math.PI / 180);
-    }
-
-    public void Draw(RenderWindow window)
-    {
-        shape.Position = new Vector2f(X - shape.Radius, Y - shape.Radius);
-        window.Draw(shape);
     }
 }
