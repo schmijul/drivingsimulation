@@ -1,10 +1,12 @@
 import unittest
 import pygame
 import math
+import numpy as np
 from simulator import Simulator
 from car import Car
 from obstacle import Obstacle
 from radar import Radar
+from slam_map import SlamMap
 
 class TestSimulator(unittest.TestCase):
     def setUp(self):
@@ -15,10 +17,11 @@ class TestSimulator(unittest.TestCase):
         pygame.quit()
 
     def test_simulator_initialization(self):
-        self.assertEqual(self.simulator.width, 1600)  # Double the input width
+        self.assertEqual(self.simulator.width, 2400)  # Triple the input width
         self.assertEqual(self.simulator.height, 600)
         self.assertIsInstance(self.simulator.car, Car)
         self.assertIsInstance(self.simulator.radar, Radar)
+        self.assertIsInstance(self.simulator.slam_map, SlamMap)
         self.assertEqual(len(self.simulator.obstacles), 5)
 
     def test_obstacle_spawn(self):
@@ -26,7 +29,7 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(len(self.simulator.obstacles), 15)  # 5 from init + 10 new
         for obstacle in self.simulator.obstacles:
             self.assertIsInstance(obstacle, Obstacle)
-            self.assertTrue(0 <= obstacle.rect.x < self.simulator.width // 2)
+            self.assertTrue(0 <= obstacle.rect.x < self.simulator.width // 3)
             self.assertTrue(0 <= obstacle.rect.y < self.simulator.height)
 
     def test_collision_detection(self):
@@ -75,9 +78,6 @@ class TestRadar(unittest.TestCase):
         detections = self.radar.scan(self.car, self.obstacles)
         self.assertGreater(len(detections), 0, "Radar should detect at least one obstacle")
         
-        print(f"Number of detections: {len(detections)}")
-        print("Detections:", detections)
-        
         car_center = self.car.rect.center
         obstacle_center = self.obstacles[0].rect.center
         
@@ -85,9 +85,6 @@ class TestRadar(unittest.TestCase):
                              (obstacle_center[1] - car_center[1])**2)**0.5
         expected_angle = math.degrees(math.atan2(car_center[1] - obstacle_center[1], 
                                                  obstacle_center[0] - car_center[0]))
-        
-        print(f"Expected distance: {expected_distance}")
-        print(f"Expected angle: {expected_angle}")
         
         # Check if any detection is close to the expected values
         close_detection = any(
@@ -98,10 +95,29 @@ class TestRadar(unittest.TestCase):
         self.assertTrue(close_detection, 
                         "At least one detection should be close to the expected values")
 
-        if not close_detection:
-            print("No close detections found. Closest detection:")
-            closest = min(detections, key=lambda d: abs(d[0] - expected_distance))
-            print(f"Distance: {closest[0]}, Angle: {closest[1]}")
+class TestSlamMap(unittest.TestCase):
+    def setUp(self):
+        self.slam_map = SlamMap(800, 600, resolution=10)
+        self.car = Car(400, 300, 5, 0.1, 0.05)
+
+    def test_slam_map_initialization(self):
+        self.assertEqual(self.slam_map.width, 800)
+        self.assertEqual(self.slam_map.height, 600)
+        self.assertEqual(self.slam_map.resolution, 10)
+        self.assertEqual(self.slam_map.grid_width, 80)
+        self.assertEqual(self.slam_map.grid_height, 60)
+        self.assertEqual(self.slam_map.grid.shape, (60, 80))
+
+    def test_slam_map_update(self):
+        initial_sum = np.sum(self.slam_map.grid)
+        self.slam_map.update(self.car.rect.center, self.car.angle, [(100, 0)])
+        updated_sum = np.sum(self.slam_map.grid)
+        self.assertGreater(updated_sum, initial_sum, "SLAM map should be updated")
+
+    def test_slam_map_draw(self):
+        surface = self.slam_map.draw()
+        self.assertIsInstance(surface, pygame.Surface)
+        self.assertEqual(surface.get_size(), (800, 600))
 
 if __name__ == '__main__':
     unittest.main()

@@ -19,8 +19,17 @@ class Simulator:
         self.obstacles = []
         self.clock = pygame.time.Clock()
         self.slam_map = SlamMap(width, height)
-
+        
+        self.goal = self.spawn_goal()
         self.spawn_initial_obstacles(num_obstacles)
+
+    def spawn_goal(self):
+        while True:
+            x = random.randint(50, self.width // 3 - 50)
+            y = random.randint(50, self.height - 50)
+            goal_rect = pygame.Rect(x, y, 20, 20)
+            if not any(goal_rect.colliderect(obs.rect) for obs in self.obstacles):
+                return goal_rect
 
     def spawn_initial_obstacles(self, num_obstacles):
         for _ in range(num_obstacles):
@@ -31,12 +40,16 @@ class Simulator:
                 new_obstacle = Obstacle(x, y, size, size)
                 
                 if not self.car.rect.colliderect(new_obstacle.rect) and \
-                   not any(new_obstacle.rect.colliderect(obs.rect) for obs in self.obstacles):
+                   not any(new_obstacle.rect.colliderect(obs.rect) for obs in self.obstacles) and \
+                   not new_obstacle.rect.colliderect(self.goal):
                     self.obstacles.append(new_obstacle)
                     break
 
     def check_collision(self):
         return any(self.car.rect.colliderect(obstacle.rect) for obstacle in self.obstacles)
+
+    def check_goal_reached(self):
+        return self.car.rect.colliderect(self.goal)
 
     def draw_radar_view(self, radar_detections):
         radar_surface = pygame.Surface((self.width // 3, self.height))
@@ -79,6 +92,10 @@ class Simulator:
                 print("Collision detected!")
                 running = False
 
+            if self.check_goal_reached():
+                print("Goal reached!")
+                self.goal = self.spawn_goal()  # Spawn a new goal
+
             radar_detections = self.radar.scan(self.car, self.obstacles)
 
             # Update SLAM map
@@ -90,6 +107,9 @@ class Simulator:
                 obstacle.draw(self.screen)
             self.radar.draw(self.screen, self.car, radar_detections)
             self.car.draw(self.screen)
+            
+            # Draw goal
+            pygame.draw.rect(self.screen, (0, 255, 0), self.goal)
 
             # Radar view (middle third)
             radar_surface = self.draw_radar_view(radar_detections)
