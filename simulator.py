@@ -6,18 +6,19 @@ from obstacle import Obstacle
 from radar import Radar
 
 class Simulator:
-    def __init__(self, width, height):
+    def __init__(self, width, height, car_speed, car_acceleration, car_deceleration, 
+                 radar_range, radar_angle, num_obstacles):
         self.width = width * 2  # Double the width to accommodate both views
         self.height = height
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Car Simulator with Radar")
         
-        self.car = Car(width // 2, height // 2)
-        self.radar = Radar(200, 60)
+        self.car = Car(width // 2, height // 2, car_speed, car_acceleration, car_deceleration)
+        self.radar = Radar(radar_range, radar_angle)
         self.obstacles = []
         self.clock = pygame.time.Clock()
 
-        self.spawn_initial_obstacles(5)
+        self.spawn_initial_obstacles(num_obstacles)
 
     def spawn_initial_obstacles(self, num_obstacles):
         for _ in range(num_obstacles):
@@ -94,6 +95,6 @@ class Simulator:
 
 if __name__ == "__main__":
     pygame.init()
-    sim = Simulator(800, 600)
+    sim = Simulator(800, 600, 5, 0.1, 0.05, 200, 60, 5)
     sim.run()
     pygame.quit()

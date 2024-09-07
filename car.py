@@ -2,15 +2,15 @@ import pygame
 import math
 
 class Car:
-    def __init__(self, x, y):
+    def __init__(self, x, y, max_speed, acceleration, deceleration):
         self.image = pygame.Surface((40, 20), pygame.SRCALPHA)
         pygame.draw.rect(self.image, (255, 0, 0), [0, 0, 40, 20])
         self.rect = self.image.get_rect(center=(x, y))
         self.angle = 0
         self.speed = 0
-        self.max_speed = 5
-        self.acceleration = 0.1
-        self.deceleration = 0.05
+        self.max_speed = max_speed
+        self.acceleration = acceleration
+        self.deceleration = deceleration
 
     def move(self, keys):
         if keys[pygame.K_UP]:
