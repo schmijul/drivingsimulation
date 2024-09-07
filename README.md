@@ -20,6 +20,8 @@ The simulator features a car that can be controlled manually or by an AI agent. 
 - `obstacle.py`: Implements the `Obstacle` class
 - `radar.py`: Implements the `Radar` class
 - `slam_map.py`: Implements the `SlamMap` class
+- `dqn_agent.py`: Implements the `DQNAgent` class
+- `tests.py`: Contains unit tests for the `Car`, `Obstacle`, `Radar`, and `SlamMap` classes
 
 ## Requirements
 
