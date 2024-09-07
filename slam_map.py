@@ -1,6 +1,5 @@
 import pygame
 import numpy as np
-import math
 
 class SlamMap:
     def __init__(self, width, height, resolution=5):
@@ -19,8 +18,8 @@ class SlamMap:
             # Calculate absolute angle
             abs_angle = car_angle + angle
             # Calculate obstacle position
-            obs_x = car_x + distance * math.cos(math.radians(abs_angle))
-            obs_y = car_y - distance * math.sin(math.radians(abs_angle))
+            obs_x = car_x + distance * np.cos(np.radians(abs_angle))
+            obs_y = car_y - distance * np.sin(np.radians(abs_angle))
             # Convert to grid coordinates
             grid_x = int(obs_x / self.resolution)
             grid_y = int(obs_y / self.resolution)
@@ -37,3 +36,7 @@ class SlamMap:
                                      (x * self.resolution, y * self.resolution, 
                                       self.resolution, self.resolution))
         return self.surface
+
+    def reset(self):
+        self.grid = np.zeros((self.grid_height, self.grid_width))
+        self.surface.fill((255, 255, 255))

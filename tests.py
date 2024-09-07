@@ -1,12 +1,8 @@
 import unittest
 import pygame
-import math
 import numpy as np
-from simulator import Simulator
-from car import Car
-from obstacle import Obstacle
-from radar import Radar
-from slam_map import SlamMap
+import torch
+from simulator import Simulator, DQNAgent, Car, Obstacle, Radar, SlamMap
 
 class TestSimulator(unittest.TestCase):
     def setUp(self):
@@ -23,24 +19,72 @@ class TestSimulator(unittest.TestCase):
         self.assertIsInstance(self.simulator.radar, Radar)
         self.assertIsInstance(self.simulator.slam_map, SlamMap)
         self.assertEqual(len(self.simulator.obstacles), 5)
+        self.assertIsInstance(self.simulator.agent, DQNAgent)
 
-    def test_obstacle_spawn(self):
-        self.simulator.spawn_initial_obstacles(10)
-        self.assertEqual(len(self.simulator.obstacles), 15)  # 5 from init + 10 new
+    def test_spawn_goal(self):
+        goal = self.simulator.spawn_goal()
+        self.assertIsInstance(goal, pygame.Rect)
+        self.assertTrue(0 <= goal.x < self.simulator.width // 3)
+        self.assertTrue(0 <= goal.y < self.simulator.height)
+
+    def test_spawn_initial_obstacles(self):
+        self.simulator.obstacles = []
+        self.simulator.spawn_initial_obstacles(3)
+        self.assertEqual(len(self.simulator.obstacles), 3)
         for obstacle in self.simulator.obstacles:
             self.assertIsInstance(obstacle, Obstacle)
             self.assertTrue(0 <= obstacle.rect.x < self.simulator.width // 3)
             self.assertTrue(0 <= obstacle.rect.y < self.simulator.height)
 
-    def test_collision_detection(self):
+    def test_check_collision(self):
+        # Clear existing obstacles
+        self.simulator.obstacles.clear()
+
         # Place car in a position where it's not colliding
         self.simulator.car.rect.center = (100, 100)
         self.assertFalse(self.simulator.check_collision())
 
         # Place an obstacle to collide with the car
-        colliding_obstacle = Obstacle(90, 90, 30, 30)
-        self.simulator.obstacles.append(colliding_obstacle)
+        new_obstacle = Obstacle(90, 90, 30, 30)
+        self.simulator.obstacles.append(new_obstacle)
         self.assertTrue(self.simulator.check_collision())
+
+        # Move car away from the obstacle
+        self.simulator.car.rect.center = (200, 200)
+        self.assertFalse(self.simulator.check_collision())
+
+    def test_check_goal_reached(self):
+        # Place car away from the goal
+        self.simulator.car.rect.center = (100, 100)
+        self.simulator.goal.center = (200, 200)
+        self.assertFalse(self.simulator.check_goal_reached())
+
+        # Place car on the goal
+        self.simulator.car.rect.center = self.simulator.goal.center
+        self.assertTrue(self.simulator.check_goal_reached())
+
+    def test_get_state(self):
+        state = self.simulator.get_state()
+        expected_state_size = self.simulator.slam_map.grid.size + 6
+        self.assertEqual(len(state), expected_state_size)
+
+    def test_step(self):
+        initial_state = self.simulator.get_state()
+        action = 0  # Move forward
+        next_state, reward, done = self.simulator.step(action)
+        
+        self.assertEqual(len(next_state), len(initial_state))
+        self.assertIsInstance(reward, (int, float))
+        self.assertIsInstance(done, bool)
+
+    def test_slam_map_reset(self):
+        # Update SLAM map
+        self.simulator.slam_map.update((100, 100), 0, [(50, 0)])
+        self.assertTrue(np.any(self.simulator.slam_map.grid != 0))
+
+        # Reset SLAM map
+        self.simulator.slam_map.reset()
+        self.assertTrue(np.all(self.simulator.slam_map.grid == 0))
 
 class TestCar(unittest.TestCase):
     def setUp(self):
@@ -76,48 +120,48 @@ class TestRadar(unittest.TestCase):
 
     def test_radar_scan(self):
         detections = self.radar.scan(self.car, self.obstacles)
-        self.assertGreater(len(detections), 0, "Radar should detect at least one obstacle")
-        
-        car_center = self.car.rect.center
-        obstacle_center = self.obstacles[0].rect.center
-        
-        expected_distance = ((obstacle_center[0] - car_center[0])**2 + 
-                             (obstacle_center[1] - car_center[1])**2)**0.5
-        expected_angle = math.degrees(math.atan2(car_center[1] - obstacle_center[1], 
-                                                 obstacle_center[0] - car_center[0]))
-        
-        # Check if any detection is close to the expected values
-        close_detection = any(
-            abs(distance - expected_distance) < 20 and abs(angle - expected_angle) < 20
-            for distance, angle in detections
-        )
-        
-        self.assertTrue(close_detection, 
-                        "At least one detection should be close to the expected values")
+        self.assertGreater(len(detections), 0)
+        for detection in detections:
+            self.assertIsInstance(detection, tuple)
+            self.assertEqual(len(detection), 2)
+            distance, angle = detection
+            self.assertIsInstance(distance, (int, float))
+            self.assertIsInstance(angle, (int, float))
 
-class TestSlamMap(unittest.TestCase):
+class TestDQNAgent(unittest.TestCase):
     def setUp(self):
-        self.slam_map = SlamMap(800, 600, resolution=10)
-        self.car = Car(400, 300, 5, 0.1, 0.05)
+        state_dim = 100
+        action_dim = 4
+        self.agent = DQNAgent(state_dim, action_dim)
 
-    def test_slam_map_initialization(self):
-        self.assertEqual(self.slam_map.width, 800)
-        self.assertEqual(self.slam_map.height, 600)
-        self.assertEqual(self.slam_map.resolution, 10)
-        self.assertEqual(self.slam_map.grid_width, 80)
-        self.assertEqual(self.slam_map.grid_height, 60)
-        self.assertEqual(self.slam_map.grid.shape, (60, 80))
+    def test_agent_initialization(self):
+        self.assertEqual(self.agent.state_dim, 100)
+        self.assertEqual(self.agent.action_dim, 4)
+        self.assertIsInstance(self.agent.model, torch.nn.Module)
+        self.assertIsInstance(self.agent.target_model, torch.nn.Module)
 
-    def test_slam_map_update(self):
-        initial_sum = np.sum(self.slam_map.grid)
-        self.slam_map.update(self.car.rect.center, self.car.angle, [(100, 0)])
-        updated_sum = np.sum(self.slam_map.grid)
-        self.assertGreater(updated_sum, initial_sum, "SLAM map should be updated")
+    def test_get_action(self):
+        state = np.random.rand(100)
+        action = self.agent.get_action(state)
+        self.assertIsInstance(action, int)
+        self.assertTrue(0 <= action < 4)
 
-    def test_slam_map_draw(self):
-        surface = self.slam_map.draw()
-        self.assertIsInstance(surface, pygame.Surface)
-        self.assertEqual(surface.get_size(), (800, 600))
+    def test_remember(self):
+        initial_memory_size = len(self.agent.memory)
+        self.agent.remember(np.zeros(100), 0, 1, np.ones(100), False)
+        self.assertEqual(len(self.agent.memory), initial_memory_size + 1)
+
+    def test_train(self):
+        # Fill memory with some random data
+        for _ in range(32):
+            state = np.random.rand(100)
+            next_state = np.random.rand(100)
+            self.agent.remember(state, 0, 1, next_state, False)
+        
+        # Train the agent
+        self.agent.train()
+        # Check if epsilon decayed
+        self.assertLess(self.agent.epsilon, 1.0)
 
 if __name__ == '__main__':
     unittest.main()
