@@ -39,6 +39,7 @@ Viewer controls:
 - `V`: switch driving camera (`chase` / `3d` / `topdown`)
 - `F`: switch camera behavior (`follow` / `tactical` / `cinematic`)
 - `E`: toggle auto-expanding world
+- `P`: save current best live-trained model to `models/assist_policy.npz`
 - `H`: toggle controls overlay
 - `C`: clear replay log (`replays/latest_episode.jsonl`)
 - `ESC`: quit
@@ -102,6 +103,8 @@ make run
 
 Then press `TAB` until `train-live` is active.
 The left panel shows the AI driving while the HUD shows live metrics (`iter`, `cand`, `last`, `best`).
+If a pretrained linear model exists, `train-live` starts from it.
+Press `P` anytime to persist the current best live model for `assistant` mode.
 
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
@@ -112,5 +115,7 @@ The left panel shows the AI driving while the HUD shows live metrics (`iter`, `c
 - `make install-dev`: install editable package with dev dependencies
 - `make run`: start the simulator UI
 - `make test`: run test suite
-- `make train`: train assistant policy from replay data
+- `make train`: train assistant policy from replay data (`MODE=replay`)
+- `make train MODE=live`: open UI directly in visible `train-live` mode
+- `make train MODE=auto`: run headless self-training
 - `make train-auto`: run headless self-training over many episodes

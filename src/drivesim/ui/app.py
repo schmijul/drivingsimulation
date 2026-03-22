@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 import pygame
 
 from drivesim.core.types import Action
 from drivesim.ml.agent import AssistAgent
 from drivesim.ml.env import DriveSimEnv
 from drivesim.ml.live_train import LivePolicyTrainer
+from drivesim.ml.models import LinearPolicyModel
 from drivesim.ml.policy import features_from_observation
 from drivesim.ml.replay import ReplayLogger
 from drivesim.ui.backend import RenderBackend
@@ -51,6 +53,11 @@ def run_app() -> None:
     renderer.set_driving_view(driving_views[current_view])
     initial_obs = env.reset()
     trainer = LivePolicyTrainer(LivePolicyTrainer.feature_dim_from_observation(initial_obs))
+    if isinstance(agent.policy, LinearPolicyModel):
+        trainer.seed_from_linear_policy(agent.policy.policy)
+    start_mode = os.getenv("DRIVESIM_START_MODE", "").strip().lower()
+    if start_mode in modes:
+        mode = start_mode
 
     running = True
     while running:
@@ -74,11 +81,16 @@ def run_app() -> None:
                     renderer.set_camera_mode(camera_modes[current_camera])
                 elif event.key == pygame.K_h:
                     show_help = not show_help
+                elif event.key == pygame.K_p:
+                    trainer.best_model().policy.save(agent.model_path)
+                    agent = AssistAgent(agent.model_path)
                 elif event.key == pygame.K_m:
                     current_map = (current_map + 1) % len(maps)
                     env.set_map(maps[current_map])
                     env.reset()
                     trainer = LivePolicyTrainer(LivePolicyTrainer.feature_dim_from_observation(env._observation(env.sim.get_state())))
+                    if isinstance(agent.policy, LinearPolicyModel):
+                        trainer.seed_from_linear_policy(agent.policy.policy)
                 elif event.key == pygame.K_e:
                     env.toggle_auto_expand()
 

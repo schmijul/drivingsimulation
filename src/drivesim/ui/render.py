@@ -361,6 +361,7 @@ class Renderer2D(RenderBackend):
             "V view chase/3d/top C clear replay",
             "F camera tactical/follow/cinematic",
             "E toggle auto-expand world",
+            "P save best live model",
             "H toggle help       ESC quit",
         ]
         title = self.font.render("Controls", True, TEXT)

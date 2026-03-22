@@ -44,6 +44,22 @@ class LivePolicyTrainer:
     def _sample_candidate(self) -> np.ndarray:
         return self.mean + self.std * self.rng.normal(size=self.param_dim).astype(np.float32)
 
+    def _policy_to_vector(self, policy: LinearPolicy) -> np.ndarray:
+        flat_w = policy.weights.reshape(-1).astype(np.float32)
+        return np.concatenate([flat_w, policy.bias.astype(np.float32)])
+
+    def seed_from_linear_policy(self, policy: LinearPolicy) -> bool:
+        expected = self.feature_dim * 2
+        if policy.weights.size != expected:
+            return False
+        vec = self._policy_to_vector(policy)
+        self.mean = vec.copy()
+        self.best_vec = vec.copy()
+        self.current_vec = vec.copy()
+        self.std = np.maximum(self.std, 0.08)
+        self.current_model = self._vector_to_model(self.current_vec)
+        return True
+
     def _vector_to_model(self, vec: np.ndarray) -> LinearPolicyModel:
         weight_size = self.feature_dim * 2
         weights = vec[:weight_size].reshape(self.feature_dim, 2).astype(np.float32)
