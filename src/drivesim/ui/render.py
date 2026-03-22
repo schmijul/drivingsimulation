@@ -29,6 +29,8 @@ MUTED: Color = (173, 186, 199)
 OBSTACLE_SIDE: Color = (60, 52, 42)
 OBSTACLE_TOP: Color = (118, 104, 88)
 GROUND_LINE: Color = (46, 52, 60)
+OBSTACLE_CHASE_SIDE: Color = (70, 60, 48)
+OBSTACLE_CHASE_TOP: Color = (128, 112, 92)
 
 
 class Renderer2D(RenderBackend):
@@ -163,7 +165,7 @@ class Renderer2D(RenderBackend):
             pygame.draw.polygon(surf, OBSTACLE_SIDE, [p4, p3, p3t, p4t])
             pygame.draw.polygon(surf, OBSTACLE_TOP, [p1t, p2t, p3t, p4t])
 
-    def _chase_point(self, wx: float, wy: float, state: SimState) -> tuple[float, float]:
+    def _chase_point(self, wx: float, wy: float, state: SimState, z: float = 0.0) -> tuple[float, float]:
         vx = state.vehicle.x
         vy = state.vehicle.y
         yaw = state.vehicle.yaw
@@ -178,7 +180,7 @@ class Renderer2D(RenderBackend):
         perspective = 1.0 / (1.0 + max(0.0, depth) * 0.006)
         scale = 1.35 * perspective
         sx = self.width * 0.5 + lat * scale
-        sy = self.height * 0.84 - depth * scale
+        sy = self.height * 0.84 - depth * scale - z * (0.45 + perspective * 0.75)
         return sx, sy
 
     def _draw_world_chase(self, surf: pygame.Surface, state: SimState) -> None:
@@ -193,16 +195,37 @@ class Renderer2D(RenderBackend):
         pygame.draw.polygon(surf, ROAD, corners)
         pygame.draw.lines(surf, GROUND_LINE, True, corners, 2)
 
-        obstacles = sorted(state.world.obstacles, key=lambda o: o.y + o.h)
+        def _forward_depth(wx: float, wy: float) -> float:
+            yaw = state.vehicle.yaw
+            return (wx - state.vehicle.x) * math.cos(yaw) + (wy - state.vehicle.y) * math.sin(yaw)
+
+        # Painter order: far objects first, near objects last.
+        obstacles = sorted(
+            state.world.obstacles,
+            key=lambda o: _forward_depth(o.x + o.w * 0.5, o.y + o.h * 0.5),
+            reverse=True,
+        )
         for obs in obstacles:
-            pts = [
-                self._chase_point(obs.x, obs.y, state),
-                self._chase_point(obs.x + obs.w, obs.y, state),
-                self._chase_point(obs.x + obs.w, obs.y + obs.h, state),
-                self._chase_point(obs.x, obs.y + obs.h, state),
+            height = 24.0
+            b1 = self._chase_point(obs.x, obs.y, state, 0.0)
+            b2 = self._chase_point(obs.x + obs.w, obs.y, state, 0.0)
+            b3 = self._chase_point(obs.x + obs.w, obs.y + obs.h, state, 0.0)
+            b4 = self._chase_point(obs.x, obs.y + obs.h, state, 0.0)
+            t1 = self._chase_point(obs.x, obs.y, state, height)
+            t2 = self._chase_point(obs.x + obs.w, obs.y, state, height)
+            t3 = self._chase_point(obs.x + obs.w, obs.y + obs.h, state, height)
+            t4 = self._chase_point(obs.x, obs.y + obs.h, state, height)
+
+            sides = [
+                [b1, b2, t2, t1],
+                [b2, b3, t3, t2],
+                [b3, b4, t4, t3],
+                [b4, b1, t1, t4],
             ]
-            pygame.draw.polygon(surf, OBSTACLE, pts)
-            pygame.draw.lines(surf, OBSTACLE_SIDE, True, pts, 2)
+            for poly in sides:
+                pygame.draw.polygon(surf, OBSTACLE_CHASE_SIDE, poly)
+            pygame.draw.polygon(surf, OBSTACLE_CHASE_TOP, [t1, t2, t3, t4])
+            pygame.draw.lines(surf, OBSTACLE_SIDE, True, [b1, b2, b3, b4], 1)
 
     def _draw_grid(self, surf: pygame.Surface, grid: np.ndarray, resolution: float) -> None:
         rows, cols = grid.shape
