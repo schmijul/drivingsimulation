@@ -9,6 +9,7 @@ DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 - A* path planning and a lightweight path-following controller
 - Gym-like environment API (`reset`, `step`)
 - Stylized Pygame visualization for demo and debugging
+- Side-by-side driving view and live SLAM map view
 - Episode replay logging as JSONL
 
 ## Quickstart

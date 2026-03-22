@@ -32,11 +32,11 @@ def run_app() -> None:
     logger.clear()
 
     state = env.sim.get_state()
-    screen = pygame.display.set_mode((int(state.world.width), int(state.world.height)))
+    renderer: RenderBackend = Renderer2D(int(state.world.width), int(state.world.height))
+    screen = pygame.display.set_mode(renderer.frame_size())
     pygame.display.set_caption("DriveSim v0.1")
 
     clock = pygame.time.Clock()
-    renderer: RenderBackend = Renderer2D(int(state.world.width), int(state.world.height))
 
     mode = "manual"
     modes = ["manual", "autopilot", "assistant"]

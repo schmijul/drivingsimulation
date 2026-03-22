@@ -12,6 +12,9 @@ from drivesim.core.types import SimState
 class RenderBackend(Protocol):
     """Renderer contract for future 2D/3D backends."""
 
+    def frame_size(self) -> tuple[int, int]:
+        ...
+
     def render(
         self,
         screen: pygame.Surface,
