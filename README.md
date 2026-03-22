@@ -105,6 +105,7 @@ Then press `TAB` until `train-live` is active.
 The left panel shows the AI driving while the HUD shows live metrics (`iter`, `cand`, `last`, `best`).
 If a pretrained linear model exists, `train-live` starts from it.
 Press `P` anytime to persist the current best live model for `assistant` mode.
+`train-live` is teacher-guided (autopilot blended with the model) to avoid spinning in place while improving.
 
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)

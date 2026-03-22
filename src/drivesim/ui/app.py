@@ -102,7 +102,9 @@ def run_app() -> None:
         elif mode == "autopilot":
             action = env.autopilot_action(current)
         elif mode == "train-live":
-            action = trainer.act(obs)
+            teacher_action = env.autopilot_action(current)
+            trainer.observe_teacher(obs, teacher_action)
+            action = trainer.act(obs, teacher_action)
         else:
             action = agent.act(obs)
 
