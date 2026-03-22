@@ -22,6 +22,7 @@ dev = [
 drivesim-run = "drivesim.main:main"
 drivesim-demo = "drivesim.main:main"
 drivesim-train = "drivesim.ml.train:main"
+drivesim-train-auto = "drivesim.ml.train_auto:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

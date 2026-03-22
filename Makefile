@@ -1,4 +1,4 @@
-.PHONY: run test train install-dev
+.PHONY: run test train train-auto install-dev
 
 install-dev:
 	python -m pip install -e .[dev]
@@ -11,3 +11,6 @@ test:
 
 train:
 	drivesim-train
+
+train-auto:
+	drivesim-train-auto

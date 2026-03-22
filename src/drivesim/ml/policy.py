@@ -31,6 +31,7 @@ class LinearPolicy:
         target.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             target,
+            model_type="linear",
             weights=self.weights,
             bias=self.bias,
             feature_mean=self.feature_mean,

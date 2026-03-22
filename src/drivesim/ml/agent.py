@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from drivesim.core.types import Action
-from drivesim.ml.policy import LinearPolicy
+from drivesim.ml.models import PolicyModel, load_policy_model
 
 
 class AssistAgent:
@@ -15,14 +15,16 @@ class AssistAgent:
 
     def __init__(self, model_path: str = "models/assist_policy.npz"):
         self.model_path = model_path
-        self.policy: LinearPolicy | None = None
+        self.policy: PolicyModel | None = None
+        self.model_name = "none"
         if Path(model_path).exists():
-            self.policy = LinearPolicy.load(model_path)
+            self.policy = load_policy_model(model_path)
+            self.model_name = self.policy.model_name
 
     @property
     def mode_label(self) -> str:
         if self.policy is not None:
-            return "assistant (trained)"
+            return f"assistant (trained:{self.model_name})"
         return "assistant (heuristic)"
 
     def act(self, observation: dict) -> Action:

@@ -48,6 +48,13 @@ Viewer controls:
 - `drivesim.ml`: gym-like env, assistant agent, replay logger
 - `drivesim.ui`: renderer and interaction layer
 
+## Model architectures
+Model definitions live in [models.py](src/drivesim/ml/models.py):
+- `linear`: default lightweight policy used by replay training and auto-train
+- `tiny_mlp`: compact neural policy architecture for future experiments
+
+`assistant` mode loads architecture metadata from the model file and reports it in the HUD label.
+
 ## Tests
 
 ```bash
@@ -65,6 +72,24 @@ make train
 3. Restart the app and switch to `assistant` mode.
 If `models/assist_policy.npz` exists, the assistant uses that trained policy.
 
+## Auto train mode (headless episodes)
+Run many autonomous episodes without rendering and optimize for:
+- reaching the goal
+- avoiding collisions
+- reducing distance to goal
+
+```bash
+make train-auto
+```
+
+Custom example:
+
+```bash
+drivesim-train-auto --map maze --iterations 20 --population 30 --episodes 4
+```
+
+The trained model is saved to `models/assist_policy.npz` and is automatically used by `assistant` mode.
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data
@@ -75,3 +100,4 @@ If `models/assist_policy.npz` exists, the assistant uses that trained policy.
 - `make run`: start the simulator UI
 - `make test`: run test suite
 - `make train`: train assistant policy from replay data
+- `make train-auto`: run headless self-training over many episodes
