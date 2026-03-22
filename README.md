@@ -89,6 +89,8 @@ drivesim-train-auto --map maze --iterations 20 --population 30 --episodes 4
 ```
 
 The trained model is saved to `models/assist_policy.npz` and is automatically used by `assistant` mode.
+The command prints live training progress with candidate-level updates and ETA.
+Use `--quiet` if you only want per-iteration summaries.
 
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)

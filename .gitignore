@@ -3,4 +3,5 @@ __pycache__/
 .venv/
 .pytest_cache/
 replays/
+models/
 src/*.egg-info/

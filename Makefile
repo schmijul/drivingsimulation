@@ -1,5 +1,5 @@
 .PHONY: run test train train-auto install-dev
-PY := PYTHONPATH=src python3
+PY := PYTHONUNBUFFERED=1 PYTHONPATH=src python3
 
 install-dev:
 	python3 -m pip install -e .[dev]

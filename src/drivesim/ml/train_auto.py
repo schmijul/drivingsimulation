@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import time
 
 import numpy as np
 
@@ -19,6 +20,7 @@ class AutoTrainConfig:
     max_steps: int = 800
     seed: int = 7
     output_path: str = "models/assist_policy.npz"
+    show_candidate_progress: bool = True
 
 
 def _vector_to_policy(vec: np.ndarray, feature_dim: int) -> LinearPolicy:
@@ -91,14 +93,29 @@ def train_auto(cfg: AutoTrainConfig) -> LinearPolicy:
     best_score = -1e18
     best_vec = mean.copy()
     best_success = 0.0
+    train_start = time.time()
+    total_candidates = cfg.iterations * cfg.population
 
     for i in range(cfg.iterations):
         candidates = mean + std * rng.normal(size=(cfg.population, param_dim)).astype(np.float32)
         scored: list[tuple[float, float, float, np.ndarray]] = []
-        for vec in candidates:
+        iter_start = time.time()
+        for j, vec in enumerate(candidates):
             policy = _vector_to_policy(vec, feature_dim)
             score, success_rate, collision_rate = _evaluate_policy(policy, cfg)
             scored.append((score, success_rate, collision_rate, vec))
+            if cfg.show_candidate_progress:
+                done = i * cfg.population + j + 1
+                elapsed = max(1e-6, time.time() - train_start)
+                rate = done / elapsed
+                remaining = max(0.0, (total_candidates - done) / max(1e-6, rate))
+                msg = (
+                    f"\rtraining {done:4d}/{total_candidates} "
+                    f"iter={i + 1:02d}/{cfg.iterations} cand={j + 1:02d}/{cfg.population} "
+                    f"score={score:8.2f} success={success_rate:5.1%} "
+                    f"collision={collision_rate:5.1%} eta={remaining:6.1f}s"
+                )
+                print(msg, end="", flush=True)
 
         scored.sort(key=lambda x: x[0], reverse=True)
         elites = scored[:elite_count]
@@ -112,16 +129,22 @@ def train_auto(cfg: AutoTrainConfig) -> LinearPolicy:
             best_vec = top_vec.copy()
             best_success = top_success
 
+        if cfg.show_candidate_progress:
+            print("", flush=True)
+        iter_time = time.time() - iter_start
         print(
             f"[iter {i + 1:02d}/{cfg.iterations}] "
-            f"best_score={top_score:8.2f} success={top_success:5.1%} collision={top_collision:5.1%}"
+            f"best_score={top_score:8.2f} success={top_success:5.1%} "
+            f"collision={top_collision:5.1%} iter_time={iter_time:5.1f}s",
+            flush=True,
         )
 
     best_policy = _vector_to_policy(best_vec, feature_dim)
     best_policy.save(cfg.output_path)
     print(
         f"saved auto-trained policy -> {cfg.output_path} "
-        f"(best_score={best_score:.2f}, success={best_success:.1%})"
+        f"(best_score={best_score:.2f}, success={best_success:.1%})",
+        flush=True,
     )
     return best_policy
 
@@ -136,6 +159,11 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, default=800, help="Max steps per episode")
     parser.add_argument("--seed", type=int, default=7, help="Random seed")
     parser.add_argument("--output", default="models/assist_policy.npz", help="Output model path")
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Disable per-candidate live progress and show only per-iteration summaries",
+    )
     args = parser.parse_args()
 
     cfg = AutoTrainConfig(
@@ -147,6 +175,7 @@ def main() -> None:
         max_steps=args.max_steps,
         seed=args.seed,
         output_path=args.output,
+        show_candidate_progress=not args.quiet,
     )
     train_auto(cfg)
 
