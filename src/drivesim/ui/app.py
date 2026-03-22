@@ -40,10 +40,11 @@ def run_app() -> None:
 
     mode = "manual"
     modes = ["manual", "autopilot", "assistant"]
-    driving_views = ["isometric", "topdown", "chase"]
+    driving_views = ["chase", "3d", "topdown"]
     current_view = 0
     camera_modes = ["follow", "tactical", "cinematic"]
     current_camera = 0
+    renderer.set_driving_view(driving_views[current_view])
 
     running = True
     while running:

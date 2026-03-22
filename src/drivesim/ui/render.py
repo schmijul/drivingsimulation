@@ -37,7 +37,7 @@ class Renderer2D(RenderBackend):
         self.height = height
         self.margin = 18
         self.header = 34
-        self.driving_view = "isometric"
+        self.driving_view = "chase"
         self.camera_mode = "follow"
         self.iso_scale = 0.72
         self.iso_lift = 0.38
@@ -65,8 +65,9 @@ class Renderer2D(RenderBackend):
             pygame.draw.rect(screen, PANEL_BG, rect.inflate(8, 8), border_radius=18)
             pygame.draw.rect(screen, PANEL_EDGE, rect.inflate(8, 8), width=2, border_radius=18)
 
+        view_label = "3d" if self.driving_view == "isometric" else self.driving_view
         left_title = self.title_font.render(
-            f"Driving View ({self.driving_view}, {self.camera_mode})",
+            f"Driving View ({view_label}, {self.camera_mode})",
             True,
             TEXT,
         )
@@ -76,6 +77,8 @@ class Renderer2D(RenderBackend):
         return left_rect, right_rect
 
     def set_driving_view(self, view: str) -> None:
+        if view == "3d":
+            view = "isometric"
         if view in ("topdown", "isometric", "chase"):
             self.driving_view = view
 
@@ -331,7 +334,7 @@ class Renderer2D(RenderBackend):
         lines = [
             "W/S throttle-brake  A/D steer",
             "TAB switch mode     R reset",
-            "V view top/iso/chase C clear replay",
+            "V view chase/3d/top C clear replay",
             "F camera tactical/follow/cinematic",
             "ESC quit",
         ]
