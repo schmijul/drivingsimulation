@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drivesim"
+version = "0.1.0"
+description = "Stylized 2D driving + SLAM simulator with ML-ready interfaces"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pygame>=2.5"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0"
+]
+
+[project.scripts]
+drivesim-run = "drivesim.main:main"
+drivesim-demo = "drivesim.main:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q"

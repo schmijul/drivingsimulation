@@ -1,73 +1,50 @@
-# Car Simulator with SLAM and DQN
+# DriveSim
 
-This project implements a 2D car simulator with Simultaneous Localization and Mapping (SLAM) and a Deep Q-Network (DQN) for autonomous navigation. The simulation includes manual driving mode and AI training mode.
+DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 
-## Project Overview
+## Features (v0.1)
+- Deterministic 2D simulator with vehicle kinematics and collision handling
+- Lidar-style raycast sensing
+- Occupancy-grid mapping as a SLAM building block
+- A* path planning and a lightweight path-following controller
+- Gym-like environment API (`reset`, `step`)
+- Stylized Pygame visualization for demo and debugging
+- Episode replay logging as JSONL
 
-The simulator features a car that can be controlled manually or by an AI agent. The car navigates in an environment with randomly placed obstacles and a goal. The simulation includes:
+## Quickstart
 
-1. A main simulation view
-2. A radar view
-3. A SLAM map view
-4. A data display showing car and goal information
-![Car Simulator Screenshot](readmeimg.png)
-
-## Key Components
-
-- `simulator.py`: Contains the main `Simulator` class and `DQNAgent` class
-- `main.py`: Entry point for running the simulation
-- `car.py`: Implements the `Car` class
-- `obstacle.py`: Implements the `Obstacle` class
-- `radar.py`: Implements the `Radar` class
-- `slam_map.py`: Implements the `SlamMap` class
-- `dqn_agent.py`: Implements the `DQNAgent` class
-- `tests.py`: Contains unit tests for the `Car`, `Obstacle`, `Radar`, and `SlamMap` classes
-
-## Requirements
-
-- Python 3.x
-- PyGame
-- PyTorch
-- NumPy
-
-## Installation
-
-1. Clone this repository
-2. Install the required packages:
-   ```
-   pip install pygame torch numpy
-   ```
-
-## Usage
-
-Run the simulation using:
-
-```
-python main.py
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+drivesim-run
 ```
 
-The `main.py` file is set up to run in AI mode by default, training for 10 episodes. You can modify the following variables in `main.py` to change the simulation parameters:
+Viewer controls:
+- `W/S`: throttle / brake
+- `A/D`: steer
+- `TAB`: switch mode (`manual` / `autopilot` / `assistant`)
+- `R`: reset
+- `ESC`: quit
 
-- `mode`: Set to "ai" for AI training or "manual" for manual control
-- `num_episodes`: Number of training episodes for AI mode
+## Architecture
+- `drivesim.core`: world model, vehicle, simulation loop
+- `drivesim.autonomy`: sensing, mapping, planning, control
+- `drivesim.ml`: gym-like env, assistant agent, replay logger
+- `drivesim.ui`: renderer and interaction layer
 
-## Modes
+## Tests
 
-### Manual Mode
-
-In manual mode, you can control the car using arrow keys:
-- Up: Accelerate
-- Down: Decelerate/Reverse
-- Left/Right: Turn
-
-### AI Mode
-
-In AI mode, the DQN agent will train to navigate the car to the goal while avoiding obstacles. After training, it will run the trained agent.
-
-## Testing
-
-Run the unit tests using:
-
+```bash
+pytest
 ```
-python -m unittest tests.py
-```
+
+## Next steps
+- Add a 3D renderer backend (for example Panda3D or a Unity bridge)
+- Train an assistant policy from replay data
+- Add dynamic obstacles and scenario generation
+
+## Make targets
+- `make install-dev`: install editable package with dev dependencies
+- `make run`: start the simulator UI
+- `make test`: run test suite
