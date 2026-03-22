@@ -68,7 +68,7 @@ pytest
 2. Train a policy from the replay log:
 
 ```bash
-make train
+make train MODE=replay
 ```
 
 3. Restart the app and switch to `assistant` mode.
@@ -87,7 +87,9 @@ make train-auto
 Custom example:
 
 ```bash
-drivesim-train-auto --map maze --iterations 20 --population 30 --episodes 4
+make train MODE=auto
+# or:
+PYTHONPATH=src python3 -m drivesim.ml.train_auto --map maze --iterations 20 --population 30 --episodes 4
 ```
 
 The trained model is saved to `models/assist_policy.npz` and is automatically used by `assistant` mode.
@@ -95,14 +97,14 @@ The command prints live training progress with candidate-level updates and ETA.
 Use `--quiet` if you only want per-iteration summaries.
 
 ## Live training in the UI
-Run:
+Default:
 
 ```bash
-make run
+make train
 ```
 
-Then press `TAB` until `train-live` is active.
 The left panel shows the AI driving while the HUD shows live metrics (`iter`, `cand`, `last`, `best`).
+Episodes are randomized (different starts/goals and periodic map changes), so it does not repeat a single route.
 If a pretrained linear model exists, `train-live` starts from it.
 Press `P` anytime to persist the current best live model for `assistant` mode.
 `train-live` is teacher-guided (autopilot blended with the model) to avoid spinning in place while improving.
