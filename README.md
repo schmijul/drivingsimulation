@@ -33,6 +33,7 @@ Viewer controls:
 - `W/S`: throttle / brake
 - `A/D`: steer
 - `TAB`: switch mode (`manual` / `autopilot` / `assistant`)
+  Modes include `train-live`, where the AI drives and updates online in the visible window.
 - `R`: reset
 - `M`: switch map preset (`default` / `maze` / `blocks`)
 - `V`: switch driving camera (`chase` / `3d` / `topdown`)
@@ -91,6 +92,16 @@ drivesim-train-auto --map maze --iterations 20 --population 30 --episodes 4
 The trained model is saved to `models/assist_policy.npz` and is automatically used by `assistant` mode.
 The command prints live training progress with candidate-level updates and ETA.
 Use `--quiet` if you only want per-iteration summaries.
+
+## Live training in the UI
+Run:
+
+```bash
+make run
+```
+
+Then press `TAB` until `train-live` is active.
+The left panel shows the AI driving while the HUD shows live metrics (`iter`, `cand`, `last`, `best`).
 
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)

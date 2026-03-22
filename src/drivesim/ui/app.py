@@ -5,6 +5,7 @@ import pygame
 from drivesim.core.types import Action
 from drivesim.ml.agent import AssistAgent
 from drivesim.ml.env import DriveSimEnv
+from drivesim.ml.live_train import LivePolicyTrainer
 from drivesim.ml.policy import features_from_observation
 from drivesim.ml.replay import ReplayLogger
 from drivesim.ui.backend import RenderBackend
@@ -39,7 +40,7 @@ def run_app() -> None:
     clock = pygame.time.Clock()
 
     mode = "manual"
-    modes = ["manual", "autopilot", "assistant"]
+    modes = ["manual", "autopilot", "assistant", "train-live"]
     maps = env.available_maps()
     current_map = maps.index(env.map_name) if env.map_name in maps else 0
     driving_views = ["chase", "3d", "topdown"]
@@ -48,6 +49,8 @@ def run_app() -> None:
     current_camera = 0
     show_help = False
     renderer.set_driving_view(driving_views[current_view])
+    initial_obs = env.reset()
+    trainer = LivePolicyTrainer(LivePolicyTrainer.feature_dim_from_observation(initial_obs))
 
     running = True
     while running:
@@ -75,6 +78,7 @@ def run_app() -> None:
                     current_map = (current_map + 1) % len(maps)
                     env.set_map(maps[current_map])
                     env.reset()
+                    trainer = LivePolicyTrainer(LivePolicyTrainer.feature_dim_from_observation(env._observation(env.sim.get_state())))
                 elif event.key == pygame.K_e:
                     env.toggle_auto_expand()
 
@@ -85,12 +89,19 @@ def run_app() -> None:
             action = _manual_action(pygame.key.get_pressed())
         elif mode == "autopilot":
             action = env.autopilot_action(current)
+        elif mode == "train-live":
+            action = trainer.act(obs)
         else:
             action = agent.act(obs)
 
         feature_vec = features_from_observation(obs)
         obs, reward, done, info = env.step(action)
         current = env.sim.get_state()
+        if mode == "train-live":
+            if trainer.observe(reward, done, obs, info):
+                env.reset()
+                obs = env._observation(env.sim.get_state())
+                current = env.sim.get_state()
 
         logger.log_step(
             {
@@ -112,6 +123,8 @@ def run_app() -> None:
         mode_label = f"{mode} | map={env.map_name} | {expand_label}"
         if mode == "assistant":
             mode_label = f"{agent.mode_label} | map={env.map_name} | {expand_label}"
+        elif mode == "train-live":
+            mode_label = f"{trainer.status_label()} | map={env.map_name} | {expand_label}"
         renderer.render(screen, current, obs["grid"], env.mapper.resolution, lidar_obs, mode_label, show_help=show_help)
 
         pygame.display.flip()

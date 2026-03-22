@@ -341,7 +341,7 @@ class Renderer2D(RenderBackend):
         pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 4)
 
     def _draw_hud(self, surf: pygame.Surface, mode: str, t: float, collided: bool) -> None:
-        panel = pygame.Surface((560, 72), pygame.SRCALPHA)
+        panel = pygame.Surface((760, 72), pygame.SRCALPHA)
         panel.fill((12, 14, 16, 170))
         surf.blit(panel, (14, 14))
         msg = f"mode={mode}   t={t:6.2f}s   {'COLLISION' if collided else 'RUNNING'}"
