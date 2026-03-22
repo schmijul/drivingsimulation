@@ -29,5 +29,6 @@ class RenderBackend(Protocol):
         grid_resolution: float,
         lidar: LidarObservation,
         mode: str,
+        show_help: bool = False,
     ) -> None:
         ...

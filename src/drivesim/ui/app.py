@@ -40,10 +40,13 @@ def run_app() -> None:
 
     mode = "manual"
     modes = ["manual", "autopilot", "assistant"]
+    maps = env.available_maps()
+    current_map = maps.index(env.map_name) if env.map_name in maps else 0
     driving_views = ["chase", "3d", "topdown"]
     current_view = 0
     camera_modes = ["follow", "tactical", "cinematic"]
     current_camera = 0
+    show_help = False
     renderer.set_driving_view(driving_views[current_view])
 
     running = True
@@ -66,6 +69,12 @@ def run_app() -> None:
                 elif event.key == pygame.K_f:
                     current_camera = (current_camera + 1) % len(camera_modes)
                     renderer.set_camera_mode(camera_modes[current_camera])
+                elif event.key == pygame.K_h:
+                    show_help = not show_help
+                elif event.key == pygame.K_m:
+                    current_map = (current_map + 1) % len(maps)
+                    env.set_map(maps[current_map])
+                    env.reset()
 
         current = env.sim.get_state()
         obs = env._observation(current)
@@ -97,10 +106,10 @@ def run_app() -> None:
         )
 
         lidar_obs = env.lidar.read(current)
-        mode_label = mode
+        mode_label = f"{mode} | map={env.map_name}"
         if mode == "assistant":
-            mode_label = agent.mode_label
-        renderer.render(screen, current, obs["grid"], env.mapper.resolution, lidar_obs, mode_label)
+            mode_label = f"{agent.mode_label} | map={env.map_name}"
+        renderer.render(screen, current, obs["grid"], env.mapper.resolution, lidar_obs, mode_label, show_help=show_help)
 
         pygame.display.flip()
         clock.tick(60)

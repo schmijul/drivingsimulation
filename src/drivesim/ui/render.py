@@ -349,17 +349,18 @@ class Renderer2D(RenderBackend):
         surf.blit(txt, (24, 38))
 
     def _draw_controls(self, surf: pygame.Surface) -> None:
-        panel = pygame.Surface((370, 142), pygame.SRCALPHA)
-        panel.fill((9, 11, 14, 178))
-        x = 12
-        y = self.height - 154
+        panel = pygame.Surface((360, 166), pygame.SRCALPHA)
+        panel.fill((9, 11, 14, 148))
+        x = self.width - 372
+        y = 72
         surf.blit(panel, (x, y))
         lines = [
             "W/S throttle-brake  A/D steer",
             "TAB switch mode     R reset",
+            "M switch map",
             "V view chase/3d/top C clear replay",
             "F camera tactical/follow/cinematic",
-            "ESC quit",
+            "H toggle help       ESC quit",
         ]
         title = self.font.render("Controls", True, TEXT)
         surf.blit(title, (x + 10, y + 10))
@@ -411,6 +412,7 @@ class Renderer2D(RenderBackend):
         grid_resolution: float,
         lidar: LidarObservation,
         mode: str,
+        show_help: bool = False,
     ) -> None:
         self._update_camera(state)
         left_rect, right_rect = self._draw_frame(screen)
@@ -436,7 +438,8 @@ class Renderer2D(RenderBackend):
             self._draw_lidar(world_surface, state, lidar)
             self._draw_car(world_surface, state)
         self._draw_hud(world_surface, mode, state.t, state.collided)
-        self._draw_controls(world_surface)
+        if show_help:
+            self._draw_controls(world_surface)
 
         self._draw_slam_view(map_surface, state, grid, grid_resolution)
         self._draw_hud(map_surface, mode, state.t, state.collided)

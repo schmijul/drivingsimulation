@@ -9,7 +9,7 @@ from drivesim.autonomy.controller import PathController
 from drivesim.autonomy.mapping import OccupancyGridMapper
 from drivesim.autonomy.planner import AStarPlanner
 from drivesim.autonomy.sensors import LidarSensor
-from drivesim.core.scenario import default_world
+from drivesim.core.scenario import available_scenarios, build_world
 from drivesim.core.simulator import Simulator
 from drivesim.core.types import Action, SimState
 
@@ -17,17 +17,29 @@ from drivesim.core.types import Action, SimState
 @dataclass
 class EnvConfig:
     max_steps: int = 1000
+    map_name: str = "default"
 
 
 class DriveSimEnv:
     def __init__(self, config: EnvConfig | None = None):
         self.config = config or EnvConfig()
-        self.world = default_world()
+        self.map_name = self.config.map_name
+        self.world = build_world(self.map_name)
         self.sim = Simulator(self.world)
         self.lidar = LidarSensor()
         self.mapper = OccupancyGridMapper(self.world)
         self.planner = AStarPlanner()
         self.controller = PathController()
+        self._steps = 0
+
+    def available_maps(self) -> list[str]:
+        return available_scenarios()
+
+    def set_map(self, map_name: str) -> None:
+        self.map_name = map_name
+        self.world = build_world(map_name)
+        self.sim = Simulator(self.world)
+        self.mapper = OccupancyGridMapper(self.world)
         self._steps = 0
 
     def reset(self, seed: int | None = None) -> Dict:
