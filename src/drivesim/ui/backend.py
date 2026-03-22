@@ -18,6 +18,9 @@ class RenderBackend(Protocol):
     def set_driving_view(self, view: str) -> None:
         ...
 
+    def set_camera_mode(self, mode: str) -> None:
+        ...
+
     def render(
         self,
         screen: pygame.Surface,

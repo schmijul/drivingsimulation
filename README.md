@@ -33,6 +33,7 @@ Viewer controls:
 - `TAB`: switch mode (`manual` / `autopilot` / `assistant`)
 - `R`: reset
 - `V`: switch driving camera (`isometric` / `topdown`)
+- `F`: switch camera behavior (`follow` / `tactical` / `cinematic`)
 - `C`: clear replay log (`replays/latest_episode.jsonl`)
 - `ESC`: quit
 

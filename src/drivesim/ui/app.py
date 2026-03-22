@@ -42,6 +42,8 @@ def run_app() -> None:
     modes = ["manual", "autopilot", "assistant"]
     driving_views = ["isometric", "topdown"]
     current_view = 0
+    camera_modes = ["follow", "tactical", "cinematic"]
+    current_camera = 0
 
     running = True
     while running:
@@ -60,6 +62,9 @@ def run_app() -> None:
                 elif event.key == pygame.K_v:
                     current_view = (current_view + 1) % len(driving_views)
                     renderer.set_driving_view(driving_views[current_view])
+                elif event.key == pygame.K_f:
+                    current_camera = (current_camera + 1) % len(camera_modes)
+                    renderer.set_camera_mode(camera_modes[current_camera])
 
         current = env.sim.get_state()
         obs = env._observation(current)

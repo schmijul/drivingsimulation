@@ -38,8 +38,11 @@ class Renderer2D(RenderBackend):
         self.margin = 18
         self.header = 34
         self.driving_view = "isometric"
+        self.camera_mode = "follow"
         self.iso_scale = 0.72
         self.iso_lift = 0.38
+        self.cam_x = width * 0.5
+        self.cam_y = height * 0.5
         pygame.font.init()
         self.font = pygame.font.SysFont("dejavusansmono", 16)
         self.title_font = pygame.font.SysFont("dejavusansmono", 18, bold=True)
@@ -62,7 +65,11 @@ class Renderer2D(RenderBackend):
             pygame.draw.rect(screen, PANEL_BG, rect.inflate(8, 8), border_radius=18)
             pygame.draw.rect(screen, PANEL_EDGE, rect.inflate(8, 8), width=2, border_radius=18)
 
-        left_title = self.title_font.render(f"Driving View ({self.driving_view})", True, TEXT)
+        left_title = self.title_font.render(
+            f"Driving View ({self.driving_view}, {self.camera_mode})",
+            True,
+            TEXT,
+        )
         right_title = self.title_font.render("Live SLAM Map", True, TEXT)
         screen.blit(left_title, (left_rect.x + 8, self.margin + 4))
         screen.blit(right_title, (right_rect.x + 8, self.margin + 4))
@@ -72,15 +79,57 @@ class Renderer2D(RenderBackend):
         if view in ("topdown", "isometric"):
             self.driving_view = view
 
+    def set_camera_mode(self, mode: str) -> None:
+        if mode in ("tactical", "follow", "cinematic"):
+            self.camera_mode = mode
+
+    def _update_camera(self, state: SimState) -> None:
+        target_x = state.world.width * 0.5
+        target_y = state.world.height * 0.5
+        smoothing = 0.08
+        lookahead = 0.0
+
+        if self.camera_mode == "follow":
+            lookahead = 35.0
+            smoothing = 0.14
+            target_x = state.vehicle.x + math.cos(state.vehicle.yaw) * lookahead
+            target_y = state.vehicle.y + math.sin(state.vehicle.yaw) * lookahead
+        elif self.camera_mode == "cinematic":
+            speed_boost = min(26.0, abs(state.vehicle.speed) * 0.35)
+            lookahead = 50.0 + speed_boost
+            smoothing = 0.09
+            target_x = state.vehicle.x + math.cos(state.vehicle.yaw) * lookahead
+            target_y = state.vehicle.y + math.sin(state.vehicle.yaw) * lookahead
+
+        self.cam_x += (target_x - self.cam_x) * smoothing
+        self.cam_y += (target_y - self.cam_y) * smoothing
+
+    def _topdown_point(self, x: float, y: float) -> tuple[float, float]:
+        return x - self.cam_x + self.width * 0.5, y - self.cam_y + self.height * 0.5
+
     def _draw_world(self, surf: pygame.Surface, state: SimState) -> None:
         surf.fill(BG)
-        pygame.draw.rect(surf, ROAD, pygame.Rect(0, 0, state.world.width, state.world.height), border_radius=18)
+        w = state.world.width
+        h = state.world.height
+        c1 = self._topdown_point(0, 0)
+        c2 = self._topdown_point(w, 0)
+        c3 = self._topdown_point(w, h)
+        c4 = self._topdown_point(0, h)
+        pygame.draw.polygon(surf, ROAD, [c1, c2, c3, c4])
+        pygame.draw.lines(surf, GROUND_LINE, True, [c1, c2, c3, c4], 2)
         for obs in state.world.obstacles:
-            pygame.draw.rect(surf, OBSTACLE, pygame.Rect(obs.x, obs.y, obs.w, obs.h), border_radius=8)
+            ox, oy = self._topdown_point(obs.x, obs.y)
+            pygame.draw.rect(surf, OBSTACLE, pygame.Rect(ox, oy, obs.w, obs.h), border_radius=8)
 
     def _iso_point(self, x: float, y: float, z: float, world_h: float) -> tuple[float, float]:
-        sx = (x - y) * self.iso_scale + self.width * 0.5
-        sy = (x + y) * self.iso_scale * 0.5 - z + self.height * 0.5 - world_h * self.iso_lift
+        rel_x = x - self.cam_x
+        rel_y = y - self.cam_y
+        scale = self.iso_scale
+        if self.camera_mode == "cinematic":
+            speed_zoom = min(0.13, abs(rel_x) * 0.00008 + abs(rel_y) * 0.00008)
+            scale *= 1.0 + speed_zoom
+        sx = (rel_x - rel_y) * scale + self.width * 0.5
+        sy = (rel_x + rel_y) * scale * 0.5 - z + self.height * 0.5 - world_h * self.iso_lift
         return sx, sy
 
     def _draw_world_iso(self, surf: pygame.Surface, state: SimState) -> None:
@@ -130,10 +179,12 @@ class Renderer2D(RenderBackend):
 
     def _draw_lidar(self, surf: pygame.Surface, state: SimState, lidar: LidarObservation) -> None:
         x, y = state.vehicle.x, state.vehicle.y
+        sx, sy = self._topdown_point(x, y)
         for a, d in zip(lidar.angles, lidar.distances):
             ex = x + math.cos(a) * d
             ey = y + math.sin(a) * d
-            pygame.draw.line(surf, RAY, (x, y), (ex, ey), 1)
+            esx, esy = self._topdown_point(ex, ey)
+            pygame.draw.line(surf, RAY, (sx, sy), (esx, esy), 1)
 
     def _draw_lidar_iso(self, surf: pygame.Surface, state: SimState, lidar: LidarObservation) -> None:
         x, y = state.vehicle.x, state.vehicle.y
@@ -147,7 +198,8 @@ class Renderer2D(RenderBackend):
     def _draw_path(self, surf: pygame.Surface, path: list[tuple[float, float]]) -> None:
         if len(path) < 2:
             return
-        pygame.draw.lines(surf, PATH, False, path, 3)
+        projected = [self._topdown_point(x, y) for x, y in path]
+        pygame.draw.lines(surf, PATH, False, projected, 3)
 
     def _draw_path_iso(self, surf: pygame.Surface, state: SimState, path: list[tuple[float, float]]) -> None:
         if len(path) < 2:
@@ -157,9 +209,9 @@ class Renderer2D(RenderBackend):
 
     def _draw_car(self, surf: pygame.Surface, state: SimState) -> None:
         x, y, yaw = state.vehicle.x, state.vehicle.y, state.vehicle.yaw
-        nose = (x + math.cos(yaw) * 14, y + math.sin(yaw) * 14)
-        left = (x + math.cos(yaw + 2.4) * 10, y + math.sin(yaw + 2.4) * 10)
-        right = (x + math.cos(yaw - 2.4) * 10, y + math.sin(yaw - 2.4) * 10)
+        nose = self._topdown_point(x + math.cos(yaw) * 14, y + math.sin(yaw) * 14)
+        left = self._topdown_point(x + math.cos(yaw + 2.4) * 10, y + math.sin(yaw + 2.4) * 10)
+        right = self._topdown_point(x + math.cos(yaw - 2.4) * 10, y + math.sin(yaw - 2.4) * 10)
         pygame.draw.polygon(surf, CAR, [nose, left, right])
 
     def _draw_car_iso(self, surf: pygame.Surface, state: SimState) -> None:
@@ -183,8 +235,9 @@ class Renderer2D(RenderBackend):
 
     def _draw_goal(self, surf: pygame.Surface, state: SimState) -> None:
         gx, gy = state.world.goal
-        pygame.draw.circle(surf, GOAL, (int(gx), int(gy)), 11)
-        pygame.draw.circle(surf, (10, 20, 14), (int(gx), int(gy)), 5)
+        sx, sy = self._topdown_point(gx, gy)
+        pygame.draw.circle(surf, GOAL, (int(sx), int(sy)), 11)
+        pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 5)
 
     def _draw_goal_iso(self, surf: pygame.Surface, state: SimState) -> None:
         gx, gy = state.world.goal
@@ -201,15 +254,16 @@ class Renderer2D(RenderBackend):
         surf.blit(txt, (24, 38))
 
     def _draw_controls(self, surf: pygame.Surface) -> None:
-        panel = pygame.Surface((370, 118), pygame.SRCALPHA)
+        panel = pygame.Surface((370, 142), pygame.SRCALPHA)
         panel.fill((9, 11, 14, 178))
         x = 12
-        y = self.height - 130
+        y = self.height - 154
         surf.blit(panel, (x, y))
         lines = [
             "W/S throttle-brake  A/D steer",
             "TAB switch mode     R reset",
             "V view topdown/iso  C clear replay",
+            "F camera tactical/follow/cinematic",
             "ESC quit",
         ]
         title = self.font.render("Controls", True, TEXT)
@@ -236,11 +290,21 @@ class Renderer2D(RenderBackend):
         pygame.draw.rect(surf, GRID_OCC, pygame.Rect(x + 10, y + 86, 14, 14))
         surf.blit(self.font.render("occupied evidence", True, MUTED), (x + 30, y + 84))
 
+    def _draw_goal_map(self, surf: pygame.Surface, state: SimState) -> None:
+        gx, gy = state.world.goal
+        pygame.draw.circle(surf, GOAL, (int(gx), int(gy)), 11)
+        pygame.draw.circle(surf, (10, 20, 14), (int(gx), int(gy)), 5)
+
+    def _draw_path_map(self, surf: pygame.Surface, path: list[tuple[float, float]]) -> None:
+        if len(path) < 2:
+            return
+        pygame.draw.lines(surf, PATH, False, path, 3)
+
     def _draw_slam_view(self, surf: pygame.Surface, state: SimState, grid: np.ndarray, resolution: float) -> None:
         surf.fill(MAP_BG)
         self._draw_grid(surf, grid, resolution)
-        self._draw_goal(surf, state)
-        self._draw_path(surf, state.path)
+        self._draw_goal_map(surf, state)
+        self._draw_path_map(surf, state.path)
         self._draw_map_car(surf, state)
         self._draw_slam_legend(surf, grid)
 
@@ -253,6 +317,7 @@ class Renderer2D(RenderBackend):
         lidar: LidarObservation,
         mode: str,
     ) -> None:
+        self._update_camera(state)
         left_rect, right_rect = self._draw_frame(screen)
         world_surface = pygame.Surface((self.width, self.height))
         map_surface = pygame.Surface((self.width, self.height))
