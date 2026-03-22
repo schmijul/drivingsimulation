@@ -76,7 +76,7 @@ class Renderer2D(RenderBackend):
         return left_rect, right_rect
 
     def set_driving_view(self, view: str) -> None:
-        if view in ("topdown", "isometric"):
+        if view in ("topdown", "isometric", "chase"):
             self.driving_view = view
 
     def set_camera_mode(self, mode: str) -> None:
@@ -160,6 +160,47 @@ class Renderer2D(RenderBackend):
             pygame.draw.polygon(surf, OBSTACLE_SIDE, [p4, p3, p3t, p4t])
             pygame.draw.polygon(surf, OBSTACLE_TOP, [p1t, p2t, p3t, p4t])
 
+    def _chase_point(self, wx: float, wy: float, state: SimState) -> tuple[float, float]:
+        vx = state.vehicle.x
+        vy = state.vehicle.y
+        yaw = state.vehicle.yaw
+        dx = wx - vx
+        dy = wy - vy
+
+        # Convert world position into car-local coordinates.
+        fwd = dx * math.cos(yaw) + dy * math.sin(yaw)
+        lat = -dx * math.sin(yaw) + dy * math.cos(yaw)
+
+        depth = max(-40.0, fwd)
+        perspective = 1.0 / (1.0 + max(0.0, depth) * 0.006)
+        scale = 1.35 * perspective
+        sx = self.width * 0.5 + lat * scale
+        sy = self.height * 0.84 - depth * scale
+        return sx, sy
+
+    def _draw_world_chase(self, surf: pygame.Surface, state: SimState) -> None:
+        surf.fill(BG)
+        world = state.world
+        corners = [
+            self._chase_point(0, 0, state),
+            self._chase_point(world.width, 0, state),
+            self._chase_point(world.width, world.height, state),
+            self._chase_point(0, world.height, state),
+        ]
+        pygame.draw.polygon(surf, ROAD, corners)
+        pygame.draw.lines(surf, GROUND_LINE, True, corners, 2)
+
+        obstacles = sorted(state.world.obstacles, key=lambda o: o.y + o.h)
+        for obs in obstacles:
+            pts = [
+                self._chase_point(obs.x, obs.y, state),
+                self._chase_point(obs.x + obs.w, obs.y, state),
+                self._chase_point(obs.x + obs.w, obs.y + obs.h, state),
+                self._chase_point(obs.x, obs.y + obs.h, state),
+            ]
+            pygame.draw.polygon(surf, OBSTACLE, pts)
+            pygame.draw.lines(surf, OBSTACLE_SIDE, True, pts, 2)
+
     def _draw_grid(self, surf: pygame.Surface, grid: np.ndarray, resolution: float) -> None:
         rows, cols = grid.shape
         for gy in range(rows):
@@ -195,6 +236,14 @@ class Renderer2D(RenderBackend):
             esx, esy = self._iso_point(ex, ey, 0.0, state.world.height)
             pygame.draw.line(surf, RAY, (sx, sy), (esx, esy), 1)
 
+    def _draw_lidar_chase(self, surf: pygame.Surface, state: SimState, lidar: LidarObservation) -> None:
+        sx, sy = self._chase_point(state.vehicle.x, state.vehicle.y, state)
+        for a, d in zip(lidar.angles, lidar.distances):
+            ex = state.vehicle.x + math.cos(a) * d
+            ey = state.vehicle.y + math.sin(a) * d
+            esx, esy = self._chase_point(ex, ey, state)
+            pygame.draw.line(surf, RAY, (sx, sy), (esx, esy), 1)
+
     def _draw_path(self, surf: pygame.Surface, path: list[tuple[float, float]]) -> None:
         if len(path) < 2:
             return
@@ -205,6 +254,12 @@ class Renderer2D(RenderBackend):
         if len(path) < 2:
             return
         projected = [self._iso_point(x, y, 2.0, state.world.height) for x, y in path]
+        pygame.draw.lines(surf, PATH, False, projected, 3)
+
+    def _draw_path_chase(self, surf: pygame.Surface, state: SimState, path: list[tuple[float, float]]) -> None:
+        if len(path) < 2:
+            return
+        projected = [self._chase_point(x, y, state) for x, y in path]
         pygame.draw.lines(surf, PATH, False, projected, 3)
 
     def _draw_car(self, surf: pygame.Surface, state: SimState) -> None:
@@ -222,6 +277,14 @@ class Renderer2D(RenderBackend):
         nose = self._iso_point(nose_w[0], nose_w[1], 11.0, state.world.height)
         left = self._iso_point(left_w[0], left_w[1], 11.0, state.world.height)
         right = self._iso_point(right_w[0], right_w[1], 11.0, state.world.height)
+        pygame.draw.polygon(surf, CAR, [nose, left, right])
+
+    def _draw_car_chase(self, surf: pygame.Surface) -> None:
+        cx = self.width * 0.5
+        cy = self.height * 0.84
+        nose = (cx, cy - 16)
+        left = (cx - 12, cy + 8)
+        right = (cx + 12, cy + 8)
         pygame.draw.polygon(surf, CAR, [nose, left, right])
 
     def _draw_map_car(self, surf: pygame.Surface, state: SimState) -> None:
@@ -245,6 +308,12 @@ class Renderer2D(RenderBackend):
         pygame.draw.circle(surf, GOAL, (int(sx), int(sy)), 9)
         pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 4)
 
+    def _draw_goal_chase(self, surf: pygame.Surface, state: SimState) -> None:
+        gx, gy = state.world.goal
+        sx, sy = self._chase_point(gx, gy, state)
+        pygame.draw.circle(surf, GOAL, (int(sx), int(sy)), 9)
+        pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 4)
+
     def _draw_hud(self, surf: pygame.Surface, mode: str, t: float, collided: bool) -> None:
         panel = pygame.Surface((330, 72), pygame.SRCALPHA)
         panel.fill((12, 14, 16, 170))
@@ -262,7 +331,7 @@ class Renderer2D(RenderBackend):
         lines = [
             "W/S throttle-brake  A/D steer",
             "TAB switch mode     R reset",
-            "V view topdown/iso  C clear replay",
+            "V view top/iso/chase C clear replay",
             "F camera tactical/follow/cinematic",
             "ESC quit",
         ]
@@ -328,6 +397,12 @@ class Renderer2D(RenderBackend):
             self._draw_path_iso(world_surface, state, state.path)
             self._draw_lidar_iso(world_surface, state, lidar)
             self._draw_car_iso(world_surface, state)
+        elif self.driving_view == "chase":
+            self._draw_world_chase(world_surface, state)
+            self._draw_goal_chase(world_surface, state)
+            self._draw_path_chase(world_surface, state, state.path)
+            self._draw_lidar_chase(world_surface, state, lidar)
+            self._draw_car_chase(world_surface)
         else:
             self._draw_world(world_surface, state)
             self._draw_goal(world_surface, state)
