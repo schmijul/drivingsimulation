@@ -59,6 +59,39 @@ class DriveSimEnv:
         self.auto_expand = not self.auto_expand
         return self.auto_expand
 
+    def _point_is_free(self, x: float, y: float, margin: float = 14.0) -> bool:
+        if x < margin or y < margin or x > self.world.width - margin or y > self.world.height - margin:
+            return False
+        for obs in self.world.obstacles:
+            if obs.x - margin <= x <= obs.x + obs.w + margin and obs.y - margin <= y <= obs.y + obs.h + margin:
+                return False
+        return True
+
+    def _sample_free_point(self, rng: np.random.Generator, tries: int = 200) -> tuple[float, float]:
+        for _ in range(tries):
+            x = float(rng.uniform(20.0, self.world.width - 20.0))
+            y = float(rng.uniform(20.0, self.world.height - 20.0))
+            if self._point_is_free(x, y):
+                return x, y
+        return self.world.start
+
+    def randomize_episode(self, rng: np.random.Generator, min_goal_distance: float = 220.0) -> Dict:
+        start = self._sample_free_point(rng)
+        goal = start
+        for _ in range(120):
+            cand = self._sample_free_point(rng)
+            if math.hypot(cand[0] - start[0], cand[1] - start[1]) >= min_goal_distance:
+                goal = cand
+                break
+            goal = cand
+
+        self.world.start = start
+        self.world.goal = goal
+        self.sim = Simulator(self.world)
+        self._steps = 0
+        state = self.sim.get_state()
+        return self._observation(state)
+
     def _chunk_counts(self) -> tuple[int, int]:
         cx = int(math.ceil(self.world.width / self.chunk_size))
         cy = int(math.ceil(self.world.height / self.chunk_size))

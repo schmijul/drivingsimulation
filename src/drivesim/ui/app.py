@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import numpy as np
 import pygame
 
 from drivesim.core.types import Action
@@ -53,6 +54,8 @@ def run_app() -> None:
     renderer.set_driving_view(driving_views[current_view])
     initial_obs = env.reset()
     trainer = LivePolicyTrainer(LivePolicyTrainer.feature_dim_from_observation(initial_obs))
+    live_rng = np.random.default_rng(17)
+    live_episodes = 0
     if isinstance(agent.policy, LinearPolicyModel):
         trainer.seed_from_linear_policy(agent.policy.policy)
     start_mode = os.getenv("DRIVESIM_START_MODE", "").strip().lower()
@@ -113,8 +116,11 @@ def run_app() -> None:
         current = env.sim.get_state()
         if mode == "train-live":
             if trainer.observe(reward, done, obs, info):
-                env.reset()
-                obs = env._observation(env.sim.get_state())
+                live_episodes += 1
+                if live_episodes % 5 == 0:
+                    current_map = (current_map + 1) % len(maps)
+                    env.set_map(maps[current_map])
+                obs = env.randomize_episode(live_rng)
                 current = env.sim.get_state()
 
         logger.log_step(

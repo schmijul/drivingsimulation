@@ -1,6 +1,6 @@
 .PHONY: run test train train-auto install-dev
 PY := PYTHONUNBUFFERED=1 PYTHONPATH=src python3
-MODE ?= replay
+MODE ?= live
 
 install-dev:
 	python3 -m pip install -e .[dev]

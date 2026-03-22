@@ -116,7 +116,8 @@ Press `P` anytime to persist the current best live model for `assistant` mode.
 - `make install-dev`: install editable package with dev dependencies
 - `make run`: start the simulator UI
 - `make test`: run test suite
-- `make train`: train assistant policy from replay data (`MODE=replay`)
+- `make train`: start visible `train-live` mode (default `MODE=live`)
 - `make train MODE=live`: open UI directly in visible `train-live` mode
 - `make train MODE=auto`: run headless self-training
+- `make train MODE=replay`: train from replay log
 - `make train-auto`: run headless self-training over many episodes

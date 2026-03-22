@@ -1,5 +1,6 @@
 from drivesim.core.types import Action
 from drivesim.ml.env import DriveSimEnv, EnvConfig
+import numpy as np
 
 
 def test_env_reset_step_contract() -> None:
@@ -34,3 +35,12 @@ def test_auto_expand_grows_world_near_edge() -> None:
 
     assert env.world.width > old_width
     assert env.world.height > old_height
+
+
+def test_randomize_episode_changes_goal_or_start() -> None:
+    env = DriveSimEnv()
+    old_start = env.world.start
+    old_goal = env.world.goal
+    obs = env.randomize_episode(np.random.default_rng(5))
+    assert "pose" in obs and "goal" in obs
+    assert env.world.start != old_start or env.world.goal != old_goal
