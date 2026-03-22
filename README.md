@@ -26,6 +26,7 @@ Viewer controls:
 - `A/D`: steer
 - `TAB`: switch mode (`manual` / `autopilot` / `assistant`)
 - `R`: reset
+- `C`: clear replay log (`replays/latest_episode.jsonl`)
 - `ESC`: quit
 
 ## Architecture
@@ -40,6 +41,17 @@ Viewer controls:
 pytest
 ```
 
+## ML training workflow (assistant policy)
+1. Drive in `manual` or `autopilot` mode to collect replay data.
+2. Train a policy from the replay log:
+
+```bash
+make train
+```
+
+3. Restart the app and switch to `assistant` mode.
+If `models/assist_policy.npz` exists, the assistant uses that trained policy.
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data
@@ -49,3 +61,4 @@ pytest
 - `make install-dev`: install editable package with dev dependencies
 - `make run`: start the simulator UI
 - `make test`: run test suite
+- `make train`: train assistant policy from replay data

@@ -25,6 +25,7 @@ TEXT: Color = (238, 241, 245)
 PANEL_BG: Color = (10, 12, 15)
 PANEL_EDGE: Color = (58, 68, 78)
 MAP_BG: Color = (22, 26, 31)
+MUTED: Color = (173, 186, 199)
 
 
 class Renderer2D(RenderBackend):
@@ -125,12 +126,48 @@ class Renderer2D(RenderBackend):
         txt = self.font.render(msg, True, TEXT)
         surf.blit(txt, (24, 38))
 
+    def _draw_controls(self, surf: pygame.Surface) -> None:
+        panel = pygame.Surface((370, 118), pygame.SRCALPHA)
+        panel.fill((9, 11, 14, 178))
+        x = 12
+        y = self.height - 130
+        surf.blit(panel, (x, y))
+        lines = [
+            "W/S throttle-brake  A/D steer",
+            "TAB switch mode     R reset",
+            "C clear replay log  ESC quit",
+        ]
+        title = self.font.render("Controls", True, TEXT)
+        surf.blit(title, (x + 10, y + 10))
+        for i, line in enumerate(lines):
+            txt = self.font.render(line, True, MUTED)
+            surf.blit(txt, (x + 10, y + 36 + i * 24))
+
+    def _draw_slam_legend(self, surf: pygame.Surface, grid: np.ndarray) -> None:
+        panel = pygame.Surface((260, 120), pygame.SRCALPHA)
+        panel.fill((9, 11, 14, 178))
+        x = self.width - 272
+        y = self.height - 132
+        surf.blit(panel, (x, y))
+        title = self.font.render("SLAM Legend", True, TEXT)
+        surf.blit(title, (x + 10, y + 10))
+
+        explored = float(np.count_nonzero(grid > 0.08)) / float(grid.size)
+        stats = self.font.render(f"explored: {explored * 100.0:4.1f}%", True, MUTED)
+        surf.blit(stats, (x + 10, y + 34))
+
+        pygame.draw.rect(surf, GRID_FREE, pygame.Rect(x + 10, y + 62, 14, 14))
+        surf.blit(self.font.render("free evidence", True, MUTED), (x + 30, y + 60))
+        pygame.draw.rect(surf, GRID_OCC, pygame.Rect(x + 10, y + 86, 14, 14))
+        surf.blit(self.font.render("occupied evidence", True, MUTED), (x + 30, y + 84))
+
     def _draw_slam_view(self, surf: pygame.Surface, state: SimState, grid: np.ndarray, resolution: float) -> None:
         surf.fill(MAP_BG)
         self._draw_grid(surf, grid, resolution)
         self._draw_goal(surf, state)
         self._draw_path(surf, state.path)
         self._draw_map_car(surf, state)
+        self._draw_slam_legend(surf, grid)
 
     def render(
         self,
@@ -151,6 +188,7 @@ class Renderer2D(RenderBackend):
         self._draw_lidar(world_surface, state, lidar)
         self._draw_car(world_surface, state)
         self._draw_hud(world_surface, mode, state.t, state.collided)
+        self._draw_controls(world_surface)
 
         self._draw_slam_view(map_surface, state, grid, grid_resolution)
         self._draw_hud(map_surface, mode, state.t, state.collided)

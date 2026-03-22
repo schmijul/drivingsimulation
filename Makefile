@@ -1,4 +1,4 @@
-.PHONY: run test install-dev
+.PHONY: run test train install-dev
 
 install-dev:
 	python -m pip install -e .[dev]
@@ -8,3 +8,6 @@ run:
 
 test:
 	pytest
+
+train:
+	drivesim-train

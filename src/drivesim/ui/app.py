@@ -5,6 +5,7 @@ import pygame
 from drivesim.core.types import Action
 from drivesim.ml.agent import AssistAgent
 from drivesim.ml.env import DriveSimEnv
+from drivesim.ml.policy import features_from_observation
 from drivesim.ml.replay import ReplayLogger
 from drivesim.ui.backend import RenderBackend
 from drivesim.ui.render import Renderer2D
@@ -29,7 +30,6 @@ def run_app() -> None:
     env = DriveSimEnv()
     agent = AssistAgent()
     logger = ReplayLogger()
-    logger.clear()
 
     state = env.sim.get_state()
     renderer: RenderBackend = Renderer2D(int(state.world.width), int(state.world.height))
@@ -53,6 +53,8 @@ def run_app() -> None:
                     mode = modes[(modes.index(mode) + 1) % len(modes)]
                 elif event.key == pygame.K_r:
                     env.reset()
+                elif event.key == pygame.K_c:
+                    logger.clear()
 
         current = env.sim.get_state()
         obs = env._observation(current)
@@ -64,6 +66,7 @@ def run_app() -> None:
         else:
             action = agent.act(obs)
 
+        feature_vec = features_from_observation(obs)
         obs, reward, done, info = env.step(action)
         current = env.sim.get_state()
 
@@ -72,7 +75,10 @@ def run_app() -> None:
                 "t": current.t,
                 "mode": mode,
                 "action": {"throttle": action.throttle, "steering": action.steering},
+                "features": feature_vec.tolist(),
                 "pose": obs["pose"].tolist(),
+                "goal": obs["goal"].tolist(),
+                "lidar_front": [float(v) for v in obs["lidar_front"]],
                 "reward": float(reward),
                 "done": bool(done),
                 "distance_to_goal": float(info["distance_to_goal"]),
@@ -80,7 +86,10 @@ def run_app() -> None:
         )
 
         lidar_obs = env.lidar.read(current)
-        renderer.render(screen, current, obs["grid"], env.mapper.resolution, lidar_obs, mode)
+        mode_label = mode
+        if mode == "assistant":
+            mode_label = agent.mode_label
+        renderer.render(screen, current, obs["grid"], env.mapper.resolution, lidar_obs, mode_label)
 
         pygame.display.flip()
         clock.tick(60)
