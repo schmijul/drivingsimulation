@@ -2,9 +2,10 @@
 
 DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 
-## Current UI Snapshot
+## Current UI Snapshots
 
 ![DriveSim 2D split view](imgs/2dview.png)
+![DriveSim isometric split view](imgs/3dview.png)
 
 ## Features (v0.1)
 - Deterministic 2D simulator with vehicle kinematics and collision handling
