@@ -17,6 +17,7 @@ DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 - Side-by-side driving view and live SLAM map view
 - Chase (default), 3D-style isometric, and top-down driving cameras
 - Multiple map presets (`default`, `maze`, `blocks`) switchable at runtime
+- Optional chunk-based world expansion while driving
 - Episode replay logging as JSONL
 
 ## Quickstart
@@ -36,6 +37,7 @@ Viewer controls:
 - `M`: switch map preset (`default` / `maze` / `blocks`)
 - `V`: switch driving camera (`chase` / `3d` / `topdown`)
 - `F`: switch camera behavior (`follow` / `tactical` / `cinematic`)
+- `E`: toggle auto-expanding world
 - `H`: toggle controls overlay
 - `C`: clear replay log (`replays/latest_episode.jsonl`)
 - `ESC`: quit

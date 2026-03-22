@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Dict, Tuple
 
 import numpy as np
@@ -9,7 +10,7 @@ from drivesim.autonomy.controller import PathController
 from drivesim.autonomy.mapping import OccupancyGridMapper
 from drivesim.autonomy.planner import AStarPlanner
 from drivesim.autonomy.sensors import LidarSensor
-from drivesim.core.scenario import available_scenarios, build_world
+from drivesim.core.scenario import available_scenarios, build_world, generate_chunk_obstacles
 from drivesim.core.simulator import Simulator
 from drivesim.core.types import Action, SimState
 
@@ -18,6 +19,9 @@ from drivesim.core.types import Action, SimState
 class EnvConfig:
     max_steps: int = 1000
     map_name: str = "default"
+    auto_expand: bool = False
+    chunk_size: int = 400
+    expand_margin: float = 85.0
 
 
 class DriveSimEnv:
@@ -31,6 +35,12 @@ class DriveSimEnv:
         self.planner = AStarPlanner()
         self.controller = PathController()
         self._steps = 0
+        self.auto_expand = self.config.auto_expand
+        self.chunk_size = self.config.chunk_size
+        self.expand_margin = self.config.expand_margin
+        self._expansion_seed = sum((i + 1) * ord(c) for i, c in enumerate(self.map_name))
+        self._generated_chunks: set[tuple[int, int]] = set()
+        self._seed_existing_chunks()
 
     def available_maps(self) -> list[str]:
         return available_scenarios()
@@ -41,12 +51,70 @@ class DriveSimEnv:
         self.sim = Simulator(self.world)
         self.mapper = OccupancyGridMapper(self.world)
         self._steps = 0
+        self._expansion_seed = sum((i + 1) * ord(c) for i, c in enumerate(self.map_name))
+        self._generated_chunks = set()
+        self._seed_existing_chunks()
+
+    def toggle_auto_expand(self) -> bool:
+        self.auto_expand = not self.auto_expand
+        return self.auto_expand
+
+    def _chunk_counts(self) -> tuple[int, int]:
+        cx = int(math.ceil(self.world.width / self.chunk_size))
+        cy = int(math.ceil(self.world.height / self.chunk_size))
+        return cx, cy
+
+    def _seed_existing_chunks(self) -> None:
+        chunk_x, chunk_y = self._chunk_counts()
+        for cy in range(chunk_y):
+            for cx in range(chunk_x):
+                self._generated_chunks.add((cx, cy))
+
+    def _expand_world_to(self, width: float, height: float) -> None:
+        old_chunk_x, old_chunk_y = self._chunk_counts()
+        self.world.width = max(self.world.width, width)
+        self.world.height = max(self.world.height, height)
+        self.mapper.ensure_world_size(self.world.width, self.world.height)
+        new_chunk_x, new_chunk_y = self._chunk_counts()
+        for cy in range(new_chunk_y):
+            for cx in range(new_chunk_x):
+                if (cx, cy) in self._generated_chunks:
+                    continue
+                self.world.obstacles.extend(
+                    generate_chunk_obstacles(
+                        chunk_x=cx,
+                        chunk_y=cy,
+                        chunk_size=self.chunk_size,
+                        seed=self._expansion_seed,
+                    )
+                )
+                self._generated_chunks.add((cx, cy))
+
+        if new_chunk_x > old_chunk_x or new_chunk_y > old_chunk_y:
+            self.world.goal = (self.world.width - 70.0, self.world.height - 70.0)
+
+    def _maybe_expand_world(self, state: SimState) -> None:
+        if not self.auto_expand:
+            return
+        v = state.vehicle
+        grow_width = self.world.width
+        grow_height = self.world.height
+        if v.x > self.world.width - self.expand_margin:
+            grow_width += self.chunk_size
+        if v.y > self.world.height - self.expand_margin:
+            grow_height += self.chunk_size
+        if grow_width > self.world.width or grow_height > self.world.height:
+            self._expand_world_to(grow_width, grow_height)
 
     def reset(self, seed: int | None = None) -> Dict:
         del seed
         self._steps = 0
-        state = self.sim.reset()
+        self.world = build_world(self.map_name)
+        self.sim = Simulator(self.world)
         self.mapper = OccupancyGridMapper(self.world)
+        self._generated_chunks = set()
+        self._seed_existing_chunks()
+        state = self.sim.get_state()
         return self._observation(state)
 
     def _grid_goal(self) -> Tuple[int, int]:
@@ -88,7 +156,9 @@ class DriveSimEnv:
 
     def step(self, action: Action) -> Tuple[Dict, float, bool, Dict]:
         self._steps += 1
+        self._maybe_expand_world(self.sim.get_state())
         state = self.sim.step(action)
+        self._maybe_expand_world(state)
         obs = self._observation(state)
 
         dx = state.vehicle.x - self.world.goal[0]
@@ -101,5 +171,10 @@ class DriveSimEnv:
         if dist_goal < 18.0:
             reward += 4.0
 
-        info = {"distance_to_goal": dist_goal, "steps": self._steps}
+        info = {
+            "distance_to_goal": dist_goal,
+            "steps": self._steps,
+            "world_size": (self.world.width, self.world.height),
+            "auto_expand": self.auto_expand,
+        }
         return obs, reward, done, info

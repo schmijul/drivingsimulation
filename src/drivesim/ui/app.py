@@ -75,6 +75,8 @@ def run_app() -> None:
                     current_map = (current_map + 1) % len(maps)
                     env.set_map(maps[current_map])
                     env.reset()
+                elif event.key == pygame.K_e:
+                    env.toggle_auto_expand()
 
         current = env.sim.get_state()
         obs = env._observation(current)
@@ -106,9 +108,10 @@ def run_app() -> None:
         )
 
         lidar_obs = env.lidar.read(current)
-        mode_label = f"{mode} | map={env.map_name}"
+        expand_label = "expand=on" if env.auto_expand else "expand=off"
+        mode_label = f"{mode} | map={env.map_name} | {expand_label}"
         if mode == "assistant":
-            mode_label = f"{agent.mode_label} | map={env.map_name}"
+            mode_label = f"{agent.mode_label} | map={env.map_name} | {expand_label}"
         renderer.render(screen, current, obs["grid"], env.mapper.resolution, lidar_obs, mode_label, show_help=show_help)
 
         pygame.display.flip()

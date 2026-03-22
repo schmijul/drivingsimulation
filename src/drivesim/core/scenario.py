@@ -1,3 +1,5 @@
+import random
+
 from drivesim.core.types import Obstacle, World
 
 
@@ -67,3 +69,25 @@ def build_world(name: str) -> World:
     if name not in SCENARIO_BUILDERS:
         name = "default"
     return SCENARIO_BUILDERS[name]()
+
+
+def generate_chunk_obstacles(
+    chunk_x: int,
+    chunk_y: int,
+    chunk_size: int,
+    seed: int,
+    count: int = 4,
+) -> list[Obstacle]:
+    rng = random.Random(seed + chunk_x * 92821 + chunk_y * 68917)
+    origin_x = chunk_x * chunk_size
+    origin_y = chunk_y * chunk_size
+    obstacles: list[Obstacle] = []
+    for _ in range(count):
+        w = float(rng.randint(50, 130))
+        h = float(rng.randint(40, 120))
+        max_x = origin_x + chunk_size - int(w) - 20
+        max_y = origin_y + chunk_size - int(h) - 20
+        x = float(rng.randint(origin_x + 20, max(origin_x + 20, max_x)))
+        y = float(rng.randint(origin_y + 20, max(origin_y + 20, max_y)))
+        obstacles.append(Obstacle(x=x, y=y, w=w, h=h))
+    return obstacles

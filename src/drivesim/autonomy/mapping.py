@@ -13,6 +13,16 @@ class OccupancyGridMapper:
         self.rows = int(world.height // resolution) + 1
         self.grid = np.zeros((self.rows, self.cols), dtype=np.float32)
 
+    def ensure_world_size(self, width: float, height: float) -> None:
+        new_cols = int(width // self.resolution) + 1
+        new_rows = int(height // self.resolution) + 1
+        if new_cols <= self.cols and new_rows <= self.rows:
+            return
+        expanded = np.zeros((max(self.rows, new_rows), max(self.cols, new_cols)), dtype=np.float32)
+        expanded[: self.rows, : self.cols] = self.grid
+        self.grid = expanded
+        self.rows, self.cols = self.grid.shape
+
     def world_to_grid(self, x: float, y: float) -> tuple[int, int]:
         gx = max(0, min(self.cols - 1, int(x / self.resolution)))
         gy = max(0, min(self.rows - 1, int(y / self.resolution)))

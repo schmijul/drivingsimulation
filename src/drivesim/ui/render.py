@@ -341,7 +341,7 @@ class Renderer2D(RenderBackend):
         pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 4)
 
     def _draw_hud(self, surf: pygame.Surface, mode: str, t: float, collided: bool) -> None:
-        panel = pygame.Surface((330, 72), pygame.SRCALPHA)
+        panel = pygame.Surface((560, 72), pygame.SRCALPHA)
         panel.fill((12, 14, 16, 170))
         surf.blit(panel, (14, 14))
         msg = f"mode={mode}   t={t:6.2f}s   {'COLLISION' if collided else 'RUNNING'}"
@@ -349,10 +349,10 @@ class Renderer2D(RenderBackend):
         surf.blit(txt, (24, 38))
 
     def _draw_controls(self, surf: pygame.Surface) -> None:
-        panel = pygame.Surface((360, 166), pygame.SRCALPHA)
+        panel = pygame.Surface((360, 214), pygame.SRCALPHA)
         panel.fill((9, 11, 14, 148))
         x = self.width - 372
-        y = 72
+        y = 54
         surf.blit(panel, (x, y))
         lines = [
             "W/S throttle-brake  A/D steer",
@@ -360,6 +360,7 @@ class Renderer2D(RenderBackend):
             "M switch map",
             "V view chase/3d/top C clear replay",
             "F camera tactical/follow/cinematic",
+            "E toggle auto-expand world",
             "H toggle help       ESC quit",
         ]
         title = self.font.render("Controls", True, TEXT)
