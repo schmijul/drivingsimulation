@@ -1,16 +1,17 @@
 .PHONY: run test train train-auto install-dev
+PY := PYTHONPATH=src python3
 
 install-dev:
-	python -m pip install -e .[dev]
+	python3 -m pip install -e .[dev]
 
 run:
-	drivesim-run
+	$(PY) -m drivesim.main
 
 test:
-	pytest
+	$(PY) -m pytest
 
 train:
-	drivesim-train
+	$(PY) -m drivesim.ml.train
 
 train-auto:
-	drivesim-train-auto
+	$(PY) -m drivesim.ml.train_auto
