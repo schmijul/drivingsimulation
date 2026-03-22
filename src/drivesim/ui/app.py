@@ -40,6 +40,8 @@ def run_app() -> None:
 
     mode = "manual"
     modes = ["manual", "autopilot", "assistant"]
+    driving_views = ["isometric", "topdown"]
+    current_view = 0
 
     running = True
     while running:
@@ -55,6 +57,9 @@ def run_app() -> None:
                     env.reset()
                 elif event.key == pygame.K_c:
                     logger.clear()
+                elif event.key == pygame.K_v:
+                    current_view = (current_view + 1) % len(driving_views)
+                    renderer.set_driving_view(driving_views[current_view])
 
         current = env.sim.get_state()
         obs = env._observation(current)

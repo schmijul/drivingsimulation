@@ -15,6 +15,9 @@ class RenderBackend(Protocol):
     def frame_size(self) -> tuple[int, int]:
         ...
 
+    def set_driving_view(self, view: str) -> None:
+        ...
+
     def render(
         self,
         screen: pygame.Surface,
