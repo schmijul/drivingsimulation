@@ -18,7 +18,9 @@ DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 - Chase (default), 3D-style isometric, and top-down driving cameras
 - Multiple map presets (`default`, `maze`, `blocks`) switchable at runtime
 - Optional chunk-based world expansion while driving
+- Dynamic moving obstacles with online replanning support
 - Episode replay logging as JSONL
+- Deterministic `reset(seed=...)` behavior for reproducible experiments
 
 ## Quickstart
 
@@ -109,6 +111,23 @@ If a pretrained linear model exists, `train-live` starts from it.
 Press `P` anytime to persist the current best live model for `assistant` mode.
 `train-live` is teacher-guided (autopilot blended with the model) to avoid spinning in place while improving.
 
+## Evaluation workflow
+Run fixed-seed, headless evaluation and report benchmark metrics:
+- success rate
+- collision rate
+- average distance to goal
+- average steps and episode reward
+
+```bash
+make eval
+```
+
+Custom example:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze,blocks --episodes 6 --seed 11 --policy assistant
+```
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data
@@ -123,3 +142,4 @@ Press `P` anytime to persist the current best live model for `assistant` mode.
 - `make train MODE=auto`: run headless self-training
 - `make train MODE=replay`: train from replay log
 - `make train-auto`: run headless self-training over many episodes
+- `make eval`: run headless evaluation with fixed-seed metrics

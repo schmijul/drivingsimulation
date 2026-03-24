@@ -1,4 +1,4 @@
-.PHONY: run test train train-auto install-dev
+.PHONY: run test train train-auto eval install-dev
 PY := PYTHONUNBUFFERED=1 PYTHONPATH=src python3
 MODE ?= live
 
@@ -22,3 +22,6 @@ endif
 
 train-auto:
 	$(PY) -m drivesim.ml.train_auto
+
+eval:
+	$(PY) -m drivesim.ml.eval
