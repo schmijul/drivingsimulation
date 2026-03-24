@@ -16,7 +16,7 @@ DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 - Stylized Pygame visualization for demo and debugging
 - Side-by-side driving view and live SLAM map view
 - Chase (default), 3D-style isometric, and top-down driving cameras
-- Multiple map presets (`default`, `maze`, `blocks`) switchable at runtime
+- Multiple map presets (`default`, `maze`, `blocks`, `generated_easy`, `generated_medium`, `generated_hard`) switchable at runtime
 - Optional chunk-based world expansion while driving
 - Dynamic moving obstacles with online replanning support
 - Episode replay logging as JSONL
@@ -37,7 +37,7 @@ Viewer controls:
 - `TAB`: switch mode (`manual` / `autopilot` / `assistant`)
   Modes include `train-live`, where the AI drives and updates online in the visible window.
 - `R`: reset
-- `M`: switch map preset (`default` / `maze` / `blocks`)
+- `M`: switch map preset (`default` / `maze` / `blocks` / generated variants)
 - `V`: switch driving camera (`chase` / `3d` / `topdown`)
 - `F`: switch camera behavior (`follow` / `tactical` / `cinematic`)
 - `E`: toggle auto-expanding world

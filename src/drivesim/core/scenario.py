@@ -54,10 +54,41 @@ def blocks_world() -> World:
     )
 
 
+def generated_world(difficulty: str, seed: int = 41) -> World:
+    width = 900
+    height = 540
+    start = (70.0, 70.0)
+    goal = (width - 70.0, height - 70.0)
+    settings = {
+        "easy": {"count": 9, "w_min": 55, "w_max": 130, "h_min": 45, "h_max": 120},
+        "medium": {"count": 14, "w_min": 60, "w_max": 145, "h_min": 55, "h_max": 130},
+        "hard": {"count": 20, "w_min": 68, "w_max": 170, "h_min": 60, "h_max": 150},
+    }
+    cfg = settings.get(difficulty, settings["medium"])
+    rng = random.Random(seed + sum(ord(c) for c in difficulty) * 131)
+
+    obstacles: list[Obstacle] = []
+    for _ in range(cfg["count"]):
+        w = float(rng.randint(cfg["w_min"], cfg["w_max"]))
+        h = float(rng.randint(cfg["h_min"], cfg["h_max"]))
+        x = float(rng.randint(20, width - int(w) - 20))
+        y = float(rng.randint(20, height - int(h) - 20))
+        if abs(x - start[0]) < 100.0 and abs(y - start[1]) < 100.0:
+            continue
+        if abs(x - goal[0]) < 100.0 and abs(y - goal[1]) < 100.0:
+            continue
+        obstacles.append(Obstacle(x, y, w, h))
+
+    return World(width=width, height=height, obstacles=obstacles, start=start, goal=goal)
+
+
 SCENARIO_BUILDERS = {
     "default": default_world,
     "maze": maze_world,
     "blocks": blocks_world,
+    "generated_easy": lambda: generated_world("easy"),
+    "generated_medium": lambda: generated_world("medium"),
+    "generated_hard": lambda: generated_world("hard"),
 }
 
 
