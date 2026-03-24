@@ -24,6 +24,7 @@ class EnvConfig:
     expand_margin: float = 85.0
     dynamic_obstacle_count: int = 2
     dynamic_obstacle_speed: float = 52.0
+    seed: int = 7
 
 
 class DriveSimEnv:
@@ -37,6 +38,8 @@ class DriveSimEnv:
         self.planner = AStarPlanner()
         self.controller = PathController()
         self._steps = 0
+        self.seed = self.config.seed
+        self._rng = np.random.default_rng(self.seed)
         self.auto_expand = self.config.auto_expand
         self.chunk_size = self.config.chunk_size
         self.expand_margin = self.config.expand_margin
@@ -84,7 +87,12 @@ class DriveSimEnv:
                 return x, y
         return self.world.start
 
-    def randomize_episode(self, rng: np.random.Generator, min_goal_distance: float = 220.0) -> Dict:
+    def randomize_episode(
+        self,
+        rng: np.random.Generator | None = None,
+        min_goal_distance: float = 220.0,
+    ) -> Dict:
+        rng = rng or self._rng
         start = self._sample_free_point(rng)
         goal = start
         for _ in range(120):
@@ -130,7 +138,8 @@ class DriveSimEnv:
         if self.dynamic_obstacle_count <= 0:
             return
 
-        seed = self._expansion_seed + int(self.world.width) * 11 + int(self.world.height) * 7
+        base = int(self._rng.integers(0, 2**31 - 1))
+        seed = base + self._expansion_seed + int(self.world.width) * 11 + int(self.world.height) * 7
         rng = np.random.default_rng(seed)
         dynamic_obstacles = []
 
@@ -227,7 +236,9 @@ class DriveSimEnv:
             self._expand_world_to(grow_width, grow_height)
 
     def reset(self, seed: int | None = None) -> Dict:
-        del seed
+        if seed is not None:
+            self.seed = int(seed)
+            self._rng = np.random.default_rng(self.seed)
         self._steps = 0
         self.world = build_world(self.map_name)
         self.sim = Simulator(self.world)

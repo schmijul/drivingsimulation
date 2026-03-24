@@ -50,3 +50,23 @@ def test_env_spawns_configured_dynamic_obstacles() -> None:
     env = DriveSimEnv(EnvConfig(dynamic_obstacle_count=3))
     env.reset()
     assert len(env.world.dynamic_obstacles) == 3
+
+
+def test_reset_seed_reproducible_dynamic_obstacles() -> None:
+    env = DriveSimEnv(EnvConfig(dynamic_obstacle_count=2))
+    env.reset(seed=123)
+    first = [(o.x, o.y, o.vx, o.vy) for o in env.world.dynamic_obstacles]
+    env.reset(seed=123)
+    second = [(o.x, o.y, o.vx, o.vy) for o in env.world.dynamic_obstacles]
+    assert first == second
+
+
+def test_reset_seed_reproducible_randomized_episode() -> None:
+    env = DriveSimEnv(EnvConfig(dynamic_obstacle_count=0))
+    env.reset(seed=77)
+    env.randomize_episode()
+    first = (env.world.start, env.world.goal)
+    env.reset(seed=77)
+    env.randomize_episode()
+    second = (env.world.start, env.world.goal)
+    assert first == second
