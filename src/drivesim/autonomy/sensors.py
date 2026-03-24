@@ -28,6 +28,9 @@ class LidarSensor:
         for obs in state.world.obstacles:
             if obs.x <= x <= obs.x + obs.w and obs.y <= y <= obs.y + obs.h:
                 return True
+        for obs in state.world.dynamic_obstacles:
+            if obs.x <= x <= obs.x + obs.w and obs.y <= y <= obs.y + obs.h:
+                return True
         return False
 
     def read(self, state: SimState) -> LidarObservation:

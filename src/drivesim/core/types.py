@@ -30,12 +30,19 @@ class Obstacle:
 
 
 @dataclass
+class DynamicObstacle(Obstacle):
+    vx: float = 0.0
+    vy: float = 0.0
+
+
+@dataclass
 class World:
     width: float
     height: float
     obstacles: List[Obstacle]
     start: Vec2
     goal: Vec2
+    dynamic_obstacles: List[DynamicObstacle] = field(default_factory=list)
 
 
 @dataclass

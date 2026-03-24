@@ -31,6 +31,9 @@ OBSTACLE_TOP: Color = (118, 104, 88)
 GROUND_LINE: Color = (46, 52, 60)
 OBSTACLE_CHASE_SIDE: Color = (70, 60, 48)
 OBSTACLE_CHASE_TOP: Color = (128, 112, 92)
+DYNAMIC_OBSTACLE: Color = (198, 122, 74)
+DYNAMIC_OBSTACLE_SIDE: Color = (150, 92, 58)
+DYNAMIC_OBSTACLE_TOP: Color = (220, 146, 88)
 
 
 class Renderer2D(RenderBackend):
@@ -125,6 +128,9 @@ class Renderer2D(RenderBackend):
         for obs in state.world.obstacles:
             ox, oy = self._topdown_point(obs.x, obs.y)
             pygame.draw.rect(surf, OBSTACLE, pygame.Rect(ox, oy, obs.w, obs.h), border_radius=8)
+        for obs in state.world.dynamic_obstacles:
+            ox, oy = self._topdown_point(obs.x, obs.y)
+            pygame.draw.rect(surf, DYNAMIC_OBSTACLE, pygame.Rect(ox, oy, obs.w, obs.h), border_radius=7)
 
     def _iso_point(self, x: float, y: float, z: float, world_h: float) -> tuple[float, float]:
         rel_x = x - self.cam_x
@@ -164,6 +170,22 @@ class Renderer2D(RenderBackend):
             pygame.draw.polygon(surf, OBSTACLE_SIDE, [p2, p3, p3t, p2t])
             pygame.draw.polygon(surf, OBSTACLE_SIDE, [p4, p3, p3t, p4t])
             pygame.draw.polygon(surf, OBSTACLE_TOP, [p1t, p2t, p3t, p4t])
+
+        dynamic_obstacles = sorted(state.world.dynamic_obstacles, key=lambda o: o.y + o.h)
+        for obs in dynamic_obstacles:
+            h = 20.0
+            p1 = self._iso_point(obs.x, obs.y, 0, state.world.height)
+            p2 = self._iso_point(obs.x + obs.w, obs.y, 0, state.world.height)
+            p3 = self._iso_point(obs.x + obs.w, obs.y + obs.h, 0, state.world.height)
+            p4 = self._iso_point(obs.x, obs.y + obs.h, 0, state.world.height)
+            p1t = self._iso_point(obs.x, obs.y, h, state.world.height)
+            p2t = self._iso_point(obs.x + obs.w, obs.y, h, state.world.height)
+            p3t = self._iso_point(obs.x + obs.w, obs.y + obs.h, h, state.world.height)
+            p4t = self._iso_point(obs.x, obs.y + obs.h, h, state.world.height)
+            pygame.draw.polygon(surf, DYNAMIC_OBSTACLE_SIDE, [p1, p2, p2t, p1t])
+            pygame.draw.polygon(surf, DYNAMIC_OBSTACLE_SIDE, [p2, p3, p3t, p2t])
+            pygame.draw.polygon(surf, DYNAMIC_OBSTACLE_SIDE, [p4, p3, p3t, p4t])
+            pygame.draw.polygon(surf, DYNAMIC_OBSTACLE_TOP, [p1t, p2t, p3t, p4t])
 
     def _chase_point(self, wx: float, wy: float, state: SimState, z: float = 0.0) -> tuple[float, float]:
         vx = state.vehicle.x
@@ -226,6 +248,33 @@ class Renderer2D(RenderBackend):
                 pygame.draw.polygon(surf, OBSTACLE_CHASE_SIDE, poly)
             pygame.draw.polygon(surf, OBSTACLE_CHASE_TOP, [t1, t2, t3, t4])
             pygame.draw.lines(surf, OBSTACLE_SIDE, True, [b1, b2, b3, b4], 1)
+
+        dynamic_obstacles = sorted(
+            state.world.dynamic_obstacles,
+            key=lambda o: _forward_depth(o.x + o.w * 0.5, o.y + o.h * 0.5),
+            reverse=True,
+        )
+        for obs in dynamic_obstacles:
+            height = 18.0
+            b1 = self._chase_point(obs.x, obs.y, state, 0.0)
+            b2 = self._chase_point(obs.x + obs.w, obs.y, state, 0.0)
+            b3 = self._chase_point(obs.x + obs.w, obs.y + obs.h, state, 0.0)
+            b4 = self._chase_point(obs.x, obs.y + obs.h, state, 0.0)
+            t1 = self._chase_point(obs.x, obs.y, state, height)
+            t2 = self._chase_point(obs.x + obs.w, obs.y, state, height)
+            t3 = self._chase_point(obs.x + obs.w, obs.y + obs.h, state, height)
+            t4 = self._chase_point(obs.x, obs.y + obs.h, state, height)
+
+            sides = [
+                [b1, b2, t2, t1],
+                [b2, b3, t3, t2],
+                [b3, b4, t4, t3],
+                [b4, b1, t1, t4],
+            ]
+            for poly in sides:
+                pygame.draw.polygon(surf, DYNAMIC_OBSTACLE_SIDE, poly)
+            pygame.draw.polygon(surf, DYNAMIC_OBSTACLE_TOP, [t1, t2, t3, t4])
+            pygame.draw.lines(surf, DYNAMIC_OBSTACLE_SIDE, True, [b1, b2, b3, b4], 1)
 
     def _draw_grid(self, surf: pygame.Surface, grid: np.ndarray, resolution: float) -> None:
         rows, cols = grid.shape
@@ -401,6 +450,8 @@ class Renderer2D(RenderBackend):
     def _draw_slam_view(self, surf: pygame.Surface, state: SimState, grid: np.ndarray, resolution: float) -> None:
         surf.fill(MAP_BG)
         self._draw_grid(surf, grid, resolution)
+        for obs in state.world.dynamic_obstacles:
+            pygame.draw.rect(surf, DYNAMIC_OBSTACLE, pygame.Rect(obs.x, obs.y, obs.w, obs.h), border_radius=4)
         self._draw_goal_map(surf, state)
         self._draw_path_map(surf, state.path)
         self._draw_map_car(surf, state)

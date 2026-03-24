@@ -12,6 +12,9 @@ def _inside_obstacle(x: float, y: float, world: World) -> bool:
     for obs in world.obstacles:
         if obs.x <= x <= obs.x + obs.w and obs.y <= y <= obs.y + obs.h:
             return True
+    for obs in world.dynamic_obstacles:
+        if obs.x <= x <= obs.x + obs.w and obs.y <= y <= obs.y + obs.h:
+            return True
     return False
 
 
@@ -48,9 +51,43 @@ class Simulator:
     def get_state(self) -> SimState:
         return self._state
 
+    def _advance_dynamic_obstacles(self, dt: float) -> None:
+        for obs in self.world.dynamic_obstacles:
+            next_x = obs.x + obs.vx * dt
+            next_y = obs.y + obs.vy * dt
+
+            hit_x_wall = next_x < 0.0 or next_x + obs.w > self.world.width
+            hit_y_wall = next_y < 0.0 or next_y + obs.h > self.world.height
+            if hit_x_wall:
+                obs.vx *= -1.0
+                next_x = obs.x + obs.vx * dt
+            if hit_y_wall:
+                obs.vy *= -1.0
+                next_y = obs.y + obs.vy * dt
+
+            blocked = False
+            for static_obs in self.world.obstacles:
+                overlap = not (
+                    next_x + obs.w < static_obs.x
+                    or next_x > static_obs.x + static_obs.w
+                    or next_y + obs.h < static_obs.y
+                    or next_y > static_obs.y + static_obs.h
+                )
+                if overlap:
+                    blocked = True
+                    break
+
+            if blocked:
+                obs.vx *= -1.0
+                obs.vy *= -1.0
+            else:
+                obs.x = max(0.0, min(next_x, self.world.width - obs.w))
+                obs.y = max(0.0, min(next_y, self.world.height - obs.h))
+
     def step(self, action: Action) -> SimState:
         if self._state.collided:
             return self._state
+        self._advance_dynamic_obstacles(self.dt)
         next_vehicle = step_vehicle(self._state.vehicle, action, self.dt)
         collided = _collision(next_vehicle, self.world)
         if collided:

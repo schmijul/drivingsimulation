@@ -44,3 +44,9 @@ def test_randomize_episode_changes_goal_or_start() -> None:
     obs = env.randomize_episode(np.random.default_rng(5))
     assert "pose" in obs and "goal" in obs
     assert env.world.start != old_start or env.world.goal != old_goal
+
+
+def test_env_spawns_configured_dynamic_obstacles() -> None:
+    env = DriveSimEnv(EnvConfig(dynamic_obstacle_count=3))
+    env.reset()
+    assert len(env.world.dynamic_obstacles) == 3

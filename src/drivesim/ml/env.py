@@ -12,7 +12,7 @@ from drivesim.autonomy.planner import AStarPlanner
 from drivesim.autonomy.sensors import LidarSensor
 from drivesim.core.scenario import available_scenarios, build_world, generate_chunk_obstacles
 from drivesim.core.simulator import Simulator
-from drivesim.core.types import Action, SimState
+from drivesim.core.types import Action, DynamicObstacle, SimState
 
 
 @dataclass
@@ -22,6 +22,8 @@ class EnvConfig:
     auto_expand: bool = False
     chunk_size: int = 400
     expand_margin: float = 85.0
+    dynamic_obstacle_count: int = 2
+    dynamic_obstacle_speed: float = 52.0
 
 
 class DriveSimEnv:
@@ -38,9 +40,12 @@ class DriveSimEnv:
         self.auto_expand = self.config.auto_expand
         self.chunk_size = self.config.chunk_size
         self.expand_margin = self.config.expand_margin
+        self.dynamic_obstacle_count = self.config.dynamic_obstacle_count
+        self.dynamic_obstacle_speed = self.config.dynamic_obstacle_speed
         self._expansion_seed = sum((i + 1) * ord(c) for i, c in enumerate(self.map_name))
         self._generated_chunks: set[tuple[int, int]] = set()
         self._seed_existing_chunks()
+        self._spawn_dynamic_obstacles()
 
     def available_maps(self) -> list[str]:
         return available_scenarios()
@@ -54,6 +59,7 @@ class DriveSimEnv:
         self._expansion_seed = sum((i + 1) * ord(c) for i, c in enumerate(self.map_name))
         self._generated_chunks = set()
         self._seed_existing_chunks()
+        self._spawn_dynamic_obstacles()
 
     def toggle_auto_expand(self) -> bool:
         self.auto_expand = not self.auto_expand
@@ -63,6 +69,9 @@ class DriveSimEnv:
         if x < margin or y < margin or x > self.world.width - margin or y > self.world.height - margin:
             return False
         for obs in self.world.obstacles:
+            if obs.x - margin <= x <= obs.x + obs.w + margin and obs.y - margin <= y <= obs.y + obs.h + margin:
+                return False
+        for obs in self.world.dynamic_obstacles:
             if obs.x - margin <= x <= obs.x + obs.w + margin and obs.y - margin <= y <= obs.y + obs.h + margin:
                 return False
         return True
@@ -102,6 +111,84 @@ class DriveSimEnv:
         for cy in range(chunk_y):
             for cx in range(chunk_x):
                 self._generated_chunks.add((cx, cy))
+
+    @staticmethod
+    def _overlap_rect(
+        ax: float,
+        ay: float,
+        aw: float,
+        ah: float,
+        bx: float,
+        by: float,
+        bw: float,
+        bh: float,
+    ) -> bool:
+        return not (ax + aw <= bx or ax >= bx + bw or ay + ah <= by or ay >= by + bh)
+
+    def _spawn_dynamic_obstacles(self) -> None:
+        self.world.dynamic_obstacles = []
+        if self.dynamic_obstacle_count <= 0:
+            return
+
+        seed = self._expansion_seed + int(self.world.width) * 11 + int(self.world.height) * 7
+        rng = np.random.default_rng(seed)
+        dynamic_obstacles = []
+
+        for _ in range(self.dynamic_obstacle_count):
+            placed = False
+            for _ in range(250):
+                w = float(rng.uniform(18.0, 34.0))
+                h = float(rng.uniform(18.0, 34.0))
+                x = float(rng.uniform(20.0, max(21.0, self.world.width - w - 20.0)))
+                y = float(rng.uniform(20.0, max(21.0, self.world.height - h - 20.0)))
+
+                blocked = False
+                for obs in self.world.obstacles:
+                    if self._overlap_rect(x, y, w, h, obs.x - 12.0, obs.y - 12.0, obs.w + 24.0, obs.h + 24.0):
+                        blocked = True
+                        break
+                if blocked:
+                    continue
+                for obs in dynamic_obstacles:
+                    if self._overlap_rect(
+                        x,
+                        y,
+                        w,
+                        h,
+                        obs["x"] - 10.0,
+                        obs["y"] - 10.0,
+                        obs["w"] + 20.0,
+                        obs["h"] + 20.0,
+                    ):
+                        blocked = True
+                        break
+                if blocked:
+                    continue
+
+                if math.hypot(x - self.world.start[0], y - self.world.start[1]) < 85.0:
+                    continue
+                if math.hypot(x - self.world.goal[0], y - self.world.goal[1]) < 70.0:
+                    continue
+
+                angle = float(rng.uniform(0.0, 2.0 * math.pi))
+                speed = float(rng.uniform(self.dynamic_obstacle_speed * 0.6, self.dynamic_obstacle_speed))
+                dynamic_obstacles.append(
+                    {
+                        "x": x,
+                        "y": y,
+                        "w": w,
+                        "h": h,
+                        "vx": math.cos(angle) * speed,
+                        "vy": math.sin(angle) * speed,
+                    }
+                )
+                placed = True
+                break
+
+            if not placed:
+                break
+
+        self.world.dynamic_obstacles = [DynamicObstacle(**obs) for obs in dynamic_obstacles]
 
     def _expand_world_to(self, width: float, height: float) -> None:
         old_chunk_x, old_chunk_y = self._chunk_counts()
@@ -147,6 +234,7 @@ class DriveSimEnv:
         self.mapper = OccupancyGridMapper(self.world)
         self._generated_chunks = set()
         self._seed_existing_chunks()
+        self._spawn_dynamic_obstacles()
         state = self.sim.get_state()
         return self._observation(state)
 
@@ -209,5 +297,6 @@ class DriveSimEnv:
             "steps": self._steps,
             "world_size": (self.world.width, self.world.height),
             "auto_expand": self.auto_expand,
+            "dynamic_obstacles": len(self.world.dynamic_obstacles),
         }
         return obs, reward, done, info
