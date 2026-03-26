@@ -164,6 +164,8 @@ make eval-history
 PYTHONPATH=src python3 -m drivesim.ml.eval_history --sort success --limit 20
 # top single run:
 PYTHONPATH=src python3 -m drivesim.ml.eval_history --best
+# filter to strong runs on maze:
+PYTHONPATH=src python3 -m drivesim.ml.eval_history --map maze --min-success 0.60 --sort success
 ```
 
 For compare reports (`policy=both`), history rows include delta columns:

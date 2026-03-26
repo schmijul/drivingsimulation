@@ -79,3 +79,14 @@ def test_best_row_is_highest_success() -> None:
     ]
     best = sort_history(rows, "success")[0]
     assert best["report_path"] == "b.json"
+
+
+def test_success_and_map_filter_logic() -> None:
+    rows = [
+        {"maps": ["default"], "summary": {"success_rate": 0.2}, "report_path": "a.json"},
+        {"maps": ["maze"], "summary": {"success_rate": 0.7}, "report_path": "b.json"},
+        {"maps": ["default", "maze"], "summary": {"success_rate": 0.9}, "report_path": "c.json"},
+    ]
+    filtered = [r for r in rows if float(r["summary"]["success_rate"]) >= 0.7]
+    filtered = [r for r in filtered if "maze" in r["maps"]]
+    assert [r["report_path"] for r in filtered] == ["b.json", "c.json"]

@@ -80,12 +80,18 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=10, help="Rows to show")
     parser.add_argument("--sort", choices=["latest", "success"], default="latest", help="Sort order")
     parser.add_argument("--policy", default="", help="Optional filter (assistant/autopilot/both)")
+    parser.add_argument("--min-success", type=float, default=-1.0, help="Filter by minimum success rate in [0,1]")
+    parser.add_argument("--map", default="", help="Filter rows containing this map in the run config")
     parser.add_argument("--best", action="store_true", help="Show only the single best row by success rate")
     args = parser.parse_args()
 
     rows = load_history(args.path)
     if args.policy:
         rows = [r for r in rows if str(r.get("policy_mode", "")) == args.policy]
+    if args.min_success >= 0.0:
+        rows = [r for r in rows if float(_summary_block(r).get("success_rate", 0.0)) >= args.min_success]
+    if args.map:
+        rows = [r for r in rows if args.map in list(r.get("maps", []))]
     rows = sort_history(rows, args.sort)
     if args.best:
         rows = sort_history(rows, "success")[:1]
