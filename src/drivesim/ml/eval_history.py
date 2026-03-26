@@ -52,13 +52,17 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=10, help="Rows to show")
     parser.add_argument("--sort", choices=["latest", "success"], default="latest", help="Sort order")
     parser.add_argument("--policy", default="", help="Optional filter (assistant/autopilot/both)")
+    parser.add_argument("--best", action="store_true", help="Show only the single best row by success rate")
     args = parser.parse_args()
 
     rows = load_history(args.path)
     if args.policy:
         rows = [r for r in rows if str(r.get("policy_mode", "")) == args.policy]
     rows = sort_history(rows, args.sort)
-    rows = rows[: max(0, args.limit)]
+    if args.best:
+        rows = sort_history(rows, "success")[:1]
+    else:
+        rows = rows[: max(0, args.limit)]
 
     if not rows:
         print("no eval history entries")

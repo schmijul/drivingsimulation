@@ -162,6 +162,8 @@ View recent/best history rows:
 make eval-history
 # or:
 PYTHONPATH=src python3 -m drivesim.ml.eval_history --sort success --limit 20
+# top single run:
+PYTHONPATH=src python3 -m drivesim.ml.eval_history --best
 ```
 
 ## Next steps
@@ -182,3 +184,4 @@ PYTHONPATH=src python3 -m drivesim.ml.eval_history --sort success --limit 20
 - `make eval-compare`: compare assistant vs autopilot in one headless run
 - `make eval-report`: compare policies and auto-save timestamped JSON to `replays/evals/`
 - `make eval-history`: show recent eval history rows from `replays/evals/index.jsonl`
+- `make eval-best`: show the best recorded eval row by success rate

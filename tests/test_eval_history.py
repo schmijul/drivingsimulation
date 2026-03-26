@@ -40,3 +40,13 @@ def test_format_row_contains_key_fields() -> None:
     assert "autopilot" in line
     assert "succ=" in line
     assert "x.json" in line
+
+
+def test_best_row_is_highest_success() -> None:
+    rows = [
+        {"summary": {"success_rate": 0.25}, "report_path": "a.json"},
+        {"summary": {"success_rate": 0.9}, "report_path": "b.json"},
+        {"summary": {"success_rate": 0.6}, "report_path": "c.json"},
+    ]
+    best = sort_history(rows, "success")[0]
+    assert best["report_path"] == "b.json"

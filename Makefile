@@ -1,4 +1,4 @@
-.PHONY: run test train train-auto eval eval-compare eval-report eval-history install-dev
+.PHONY: run test train train-auto eval eval-compare eval-report eval-history eval-best install-dev
 PY := PYTHONUNBUFFERED=1 PYTHONPATH=src python3
 MODE ?= live
 
@@ -34,3 +34,6 @@ eval-report:
 
 eval-history:
 	$(PY) -m drivesim.ml.eval_history --limit 15
+
+eval-best:
+	$(PY) -m drivesim.ml.eval_history --best
