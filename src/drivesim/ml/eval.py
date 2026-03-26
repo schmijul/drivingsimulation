@@ -30,6 +30,27 @@ def default_eval_report_path(policy_mode: str, seed: int, now: datetime | None =
     return f"replays/evals/eval_{safe_policy}_seed{seed}_{stamp}.json"
 
 
+def _append_eval_history(
+    history_path: Path,
+    report_path: str,
+    cfg: EvalConfig,
+    summary: dict[str, object],
+    now: datetime | None = None,
+) -> None:
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    event = {
+        "ts": (now or datetime.now()).isoformat(timespec="seconds"),
+        "report_path": report_path,
+        "policy_mode": cfg.policy_mode,
+        "seed": cfg.seed,
+        "maps": cfg.maps,
+        "episodes_per_map": cfg.episodes_per_map,
+        "summary": summary,
+    }
+    with history_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(event) + "\n")
+
+
 def _episode_metrics(env: DriveSimEnv, policy_mode: str, agent: AssistAgent, episode_seed: int) -> dict[str, float | bool | int]:
     env.reset(seed=episode_seed)
     obs = env.randomize_episode()
@@ -125,6 +146,7 @@ def run_eval(cfg: EvalConfig) -> dict[str, object]:
             + "\n",
             encoding="utf-8",
         )
+        _append_eval_history(Path("replays/evals/index.jsonl"), str(out_path), cfg, result)
 
     return result
 
@@ -186,6 +208,17 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
             + "\n",
             encoding="utf-8",
         )
+        history_cfg = EvalConfig(
+            maps=cfg.maps,
+            episodes_per_map=cfg.episodes_per_map,
+            max_steps=cfg.max_steps,
+            seed=cfg.seed,
+            policy_mode="both",
+            model_path=cfg.model_path,
+            dynamic_obstacle_count=cfg.dynamic_obstacle_count,
+            json_out=cfg.json_out,
+        )
+        _append_eval_history(Path("replays/evals/index.jsonl"), str(out_path), history_cfg, result)
     return result
 
 

@@ -1,6 +1,13 @@
 from datetime import datetime
+import json
 
-from drivesim.ml.eval import EvalConfig, default_eval_report_path, run_eval, run_eval_compare
+from drivesim.ml.eval import (
+    EvalConfig,
+    _append_eval_history,
+    default_eval_report_path,
+    run_eval,
+    run_eval_compare,
+)
 
 
 def test_eval_returns_expected_metrics() -> None:
@@ -87,3 +94,14 @@ def test_eval_compare_can_write_json(tmp_path) -> None:
 def test_default_eval_report_path_contains_policy_seed_and_timestamp() -> None:
     path = default_eval_report_path("both", 11, now=datetime(2026, 3, 26, 14, 5, 7))
     assert path == "replays/evals/eval_both_seed11_20260326-140507.json"
+
+
+def test_append_eval_history_writes_jsonl(tmp_path) -> None:
+    history = tmp_path / "index.jsonl"
+    cfg = EvalConfig(maps=["default"], policy_mode="assistant", seed=11)
+    _append_eval_history(history, "replays/evals/eval_assistant_seed11_x.json", cfg, {"success_rate": 0.5})
+    lines = history.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    row = json.loads(lines[0])
+    assert row["policy_mode"] == "assistant"
+    assert row["summary"]["success_rate"] == 0.5

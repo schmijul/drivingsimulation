@@ -153,6 +153,9 @@ Auto-generate a timestamped report path:
 PYTHONPATH=src python3 -m drivesim.ml.eval --policy both --json-auto
 ```
 
+When JSON is written (`--json-out` or `--json-auto`), a compact history entry is also appended to:
+- `replays/evals/index.jsonl`
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data
