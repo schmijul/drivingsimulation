@@ -156,6 +156,14 @@ PYTHONPATH=src python3 -m drivesim.ml.eval --policy both --json-auto
 When JSON is written (`--json-out` or `--json-auto`), a compact history entry is also appended to:
 - `replays/evals/index.jsonl`
 
+View recent/best history rows:
+
+```bash
+make eval-history
+# or:
+PYTHONPATH=src python3 -m drivesim.ml.eval_history --sort success --limit 20
+```
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data
@@ -173,3 +181,4 @@ When JSON is written (`--json-out` or `--json-auto`), a compact history entry is
 - `make eval`: run headless evaluation with fixed-seed metrics
 - `make eval-compare`: compare assistant vs autopilot in one headless run
 - `make eval-report`: compare policies and auto-save timestamped JSON to `replays/evals/`
+- `make eval-history`: show recent eval history rows from `replays/evals/index.jsonl`
