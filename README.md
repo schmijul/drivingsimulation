@@ -129,6 +129,12 @@ Custom example:
 PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze,blocks --episodes 6 --seed 11 --policy assistant
 ```
 
+Compare assistant vs autopilot in one run:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze,blocks --episodes 6 --seed 11 --policy both
+```
+
 Write a JSON report for experiment tracking:
 
 ```bash

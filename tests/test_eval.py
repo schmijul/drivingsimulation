@@ -1,4 +1,4 @@
-from drivesim.ml.eval import EvalConfig, run_eval
+from drivesim.ml.eval import EvalConfig, run_eval, run_eval_compare
 
 
 def test_eval_returns_expected_metrics() -> None:
@@ -48,3 +48,35 @@ def test_eval_can_write_json_report(tmp_path) -> None:
     )
     assert out.exists()
     assert "default" in summary["per_map"]
+
+
+def test_eval_compare_returns_both_and_delta() -> None:
+    summary = run_eval_compare(
+        EvalConfig(
+            maps=["default"],
+            episodes_per_map=1,
+            max_steps=90,
+            seed=17,
+            policy_mode="both",
+            dynamic_obstacle_count=0,
+        )
+    )
+    assert "assistant" in summary
+    assert "autopilot" in summary
+    assert "delta_assistant_minus_autopilot" in summary
+
+
+def test_eval_compare_can_write_json(tmp_path) -> None:
+    out = tmp_path / "eval_compare.json"
+    run_eval_compare(
+        EvalConfig(
+            maps=["default"],
+            episodes_per_map=1,
+            max_steps=80,
+            seed=23,
+            policy_mode="both",
+            dynamic_obstacle_count=0,
+            json_out=str(out),
+        )
+    )
+    assert out.exists()

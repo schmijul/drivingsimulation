@@ -122,6 +122,66 @@ def run_eval(cfg: EvalConfig) -> dict[str, object]:
     return result
 
 
+def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
+    assistant_cfg = EvalConfig(
+        maps=cfg.maps,
+        episodes_per_map=cfg.episodes_per_map,
+        max_steps=cfg.max_steps,
+        seed=cfg.seed,
+        policy_mode="assistant",
+        model_path=cfg.model_path,
+        dynamic_obstacle_count=cfg.dynamic_obstacle_count,
+        json_out="",
+    )
+    autopilot_cfg = EvalConfig(
+        maps=cfg.maps,
+        episodes_per_map=cfg.episodes_per_map,
+        max_steps=cfg.max_steps,
+        seed=cfg.seed,
+        policy_mode="autopilot",
+        model_path=cfg.model_path,
+        dynamic_obstacle_count=cfg.dynamic_obstacle_count,
+        json_out="",
+    )
+    assistant = run_eval(assistant_cfg)
+    autopilot = run_eval(autopilot_cfg)
+    delta = {
+        "success_rate": float(assistant["success_rate"]) - float(autopilot["success_rate"]),
+        "collision_rate": float(assistant["collision_rate"]) - float(autopilot["collision_rate"]),
+        "avg_distance_to_goal": float(assistant["avg_distance_to_goal"]) - float(autopilot["avg_distance_to_goal"]),
+        "avg_steps": float(assistant["avg_steps"]) - float(autopilot["avg_steps"]),
+        "avg_total_reward": float(assistant["avg_total_reward"]) - float(autopilot["avg_total_reward"]),
+    }
+    result: dict[str, object] = {
+        "assistant": assistant,
+        "autopilot": autopilot,
+        "delta_assistant_minus_autopilot": delta,
+    }
+    if cfg.json_out:
+        out_path = Path(cfg.json_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(
+            json.dumps(
+                {
+                    "config": {
+                        "maps": cfg.maps,
+                        "episodes_per_map": cfg.episodes_per_map,
+                        "max_steps": cfg.max_steps,
+                        "seed": cfg.seed,
+                        "policy_mode": "both",
+                        "model_path": cfg.model_path,
+                        "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
+                    },
+                    "summary": result,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Headless policy evaluation across fixed maps and seeds.")
     parser.add_argument("--maps", default="default,maze,blocks", help="Comma-separated map list")
@@ -130,7 +190,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=11, help="Evaluation seed")
     parser.add_argument(
         "--policy",
-        choices=["assistant", "autopilot"],
+        choices=["assistant", "autopilot", "both"],
         default="assistant",
         help="Policy to evaluate",
     )
@@ -150,16 +210,48 @@ def main() -> None:
         dynamic_obstacle_count=args.dynamic_obstacles,
         json_out=args.json_out,
     )
-    summary = run_eval(cfg)
-    print(
-        "eval "
-        f"episodes={int(summary['episodes'])} "
-        f"success={summary['success_rate']:.1%} "
-        f"collision={summary['collision_rate']:.1%} "
-        f"avg_dist={summary['avg_distance_to_goal']:.1f} "
-        f"avg_steps={summary['avg_steps']:.1f} "
-        f"avg_reward={summary['avg_total_reward']:.3f}"
-    )
+    if cfg.policy_mode == "both":
+        summary = run_eval_compare(cfg)
+        assistant = summary["assistant"]
+        autopilot = summary["autopilot"]
+        delta = summary["delta_assistant_minus_autopilot"]
+        print(
+            "eval assistant "
+            f"episodes={int(assistant['episodes'])} "
+            f"success={assistant['success_rate']:.1%} "
+            f"collision={assistant['collision_rate']:.1%} "
+            f"avg_dist={assistant['avg_distance_to_goal']:.1f} "
+            f"avg_steps={assistant['avg_steps']:.1f} "
+            f"avg_reward={assistant['avg_total_reward']:.3f}"
+        )
+        print(
+            "eval autopilot "
+            f"episodes={int(autopilot['episodes'])} "
+            f"success={autopilot['success_rate']:.1%} "
+            f"collision={autopilot['collision_rate']:.1%} "
+            f"avg_dist={autopilot['avg_distance_to_goal']:.1f} "
+            f"avg_steps={autopilot['avg_steps']:.1f} "
+            f"avg_reward={autopilot['avg_total_reward']:.3f}"
+        )
+        print(
+            "eval delta(assistant-autopilot) "
+            f"success={delta['success_rate']:+.1%} "
+            f"collision={delta['collision_rate']:+.1%} "
+            f"avg_dist={delta['avg_distance_to_goal']:+.1f} "
+            f"avg_steps={delta['avg_steps']:+.1f} "
+            f"avg_reward={delta['avg_total_reward']:+.3f}"
+        )
+    else:
+        summary = run_eval(cfg)
+        print(
+            "eval "
+            f"episodes={int(summary['episodes'])} "
+            f"success={summary['success_rate']:.1%} "
+            f"collision={summary['collision_rate']:.1%} "
+            f"avg_dist={summary['avg_distance_to_goal']:.1f} "
+            f"avg_steps={summary['avg_steps']:.1f} "
+            f"avg_reward={summary['avg_total_reward']:.3f}"
+        )
 
 
 if __name__ == "__main__":
