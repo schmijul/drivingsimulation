@@ -117,6 +117,7 @@ Run fixed-seed, headless evaluation and report benchmark metrics:
 - collision rate
 - average distance to goal
 - average steps and episode reward
+- per-map breakdown (`default`, `maze`, etc.)
 
 ```bash
 make eval
@@ -126,6 +127,12 @@ Custom example:
 
 ```bash
 PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze,blocks --episodes 6 --seed 11 --policy assistant
+```
+
+Write a JSON report for experiment tracking:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze --episodes 6 --seed 11 --json-out replays/eval_latest.json
 ```
 
 ## Next steps

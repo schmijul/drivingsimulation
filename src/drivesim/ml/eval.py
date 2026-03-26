@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 import numpy as np
 
@@ -18,6 +20,7 @@ class EvalConfig:
     policy_mode: str = "assistant"
     model_path: str = "models/assist_policy.npz"
     dynamic_obstacle_count: int = 2
+    json_out: str = ""
 
 
 def _episode_metrics(env: DriveSimEnv, policy_mode: str, agent: AssistAgent, episode_seed: int) -> dict[str, float | bool | int]:
@@ -50,10 +53,28 @@ def _episode_metrics(env: DriveSimEnv, policy_mode: str, agent: AssistAgent, epi
     }
 
 
-def run_eval(cfg: EvalConfig) -> dict[str, float]:
+def _summarize(rows: list[dict[str, float | bool | int]]) -> dict[str, float]:
+    total = max(1, len(rows))
+    success_rate = sum(1 for r in rows if bool(r["success"])) / total
+    collision_rate = sum(1 for r in rows if bool(r["collided"])) / total
+    avg_distance = float(np.mean([float(r["distance"]) for r in rows])) if rows else float("nan")
+    avg_steps = float(np.mean([float(r["steps"]) for r in rows])) if rows else float("nan")
+    avg_reward = float(np.mean([float(r["total_reward"]) for r in rows])) if rows else float("nan")
+    return {
+        "episodes": float(total),
+        "success_rate": success_rate,
+        "collision_rate": collision_rate,
+        "avg_distance_to_goal": avg_distance,
+        "avg_steps": avg_steps,
+        "avg_total_reward": avg_reward,
+    }
+
+
+def run_eval(cfg: EvalConfig) -> dict[str, object]:
     rng = np.random.default_rng(cfg.seed)
     agent = AssistAgent(cfg.model_path)
     all_rows: list[dict[str, float | bool | int]] = []
+    rows_by_map: dict[str, list[dict[str, float | bool | int]]] = {}
 
     for map_name in cfg.maps:
         env = DriveSimEnv(
@@ -69,22 +90,36 @@ def run_eval(cfg: EvalConfig) -> dict[str, float]:
             episode_seed = int(rng.integers(0, 2**31 - 1))
             row = _episode_metrics(env, cfg.policy_mode, agent, episode_seed)
             all_rows.append(row)
+            rows_by_map.setdefault(map_name, []).append(row)
 
-    total = max(1, len(all_rows))
-    success_rate = sum(1 for r in all_rows if bool(r["success"])) / total
-    collision_rate = sum(1 for r in all_rows if bool(r["collided"])) / total
-    avg_distance = float(np.mean([float(r["distance"]) for r in all_rows])) if all_rows else float("nan")
-    avg_steps = float(np.mean([float(r["steps"]) for r in all_rows])) if all_rows else float("nan")
-    avg_reward = float(np.mean([float(r["total_reward"]) for r in all_rows])) if all_rows else float("nan")
+    overall = _summarize(all_rows)
+    per_map = {map_name: _summarize(rows) for map_name, rows in rows_by_map.items()}
+    result: dict[str, object] = {**overall, "per_map": per_map}
 
-    return {
-        "episodes": float(total),
-        "success_rate": success_rate,
-        "collision_rate": collision_rate,
-        "avg_distance_to_goal": avg_distance,
-        "avg_steps": avg_steps,
-        "avg_total_reward": avg_reward,
-    }
+    if cfg.json_out:
+        out_path = Path(cfg.json_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(
+            json.dumps(
+                {
+                    "config": {
+                        "maps": cfg.maps,
+                        "episodes_per_map": cfg.episodes_per_map,
+                        "max_steps": cfg.max_steps,
+                        "seed": cfg.seed,
+                        "policy_mode": cfg.policy_mode,
+                        "model_path": cfg.model_path,
+                        "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
+                    },
+                    "summary": result,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    return result
 
 
 def main() -> None:
@@ -101,6 +136,7 @@ def main() -> None:
     )
     parser.add_argument("--model", default="models/assist_policy.npz", help="Assistant model path")
     parser.add_argument("--dynamic-obstacles", type=int, default=2, help="Dynamic obstacles per episode")
+    parser.add_argument("--json-out", default="", help="Optional path to write evaluation summary JSON")
     args = parser.parse_args()
 
     maps = [m.strip() for m in args.maps.split(",") if m.strip()]
@@ -112,6 +148,7 @@ def main() -> None:
         policy_mode=args.policy,
         model_path=args.model,
         dynamic_obstacle_count=args.dynamic_obstacles,
+        json_out=args.json_out,
     )
     summary = run_eval(cfg)
     print(

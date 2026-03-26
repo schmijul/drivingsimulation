@@ -16,6 +16,7 @@ def test_eval_returns_expected_metrics() -> None:
     assert 0.0 <= summary["success_rate"] <= 1.0
     assert 0.0 <= summary["collision_rate"] <= 1.0
     assert summary["avg_steps"] > 0.0
+    assert "default" in summary["per_map"]
 
 
 def test_eval_is_reproducible_with_same_seed() -> None:
@@ -30,3 +31,20 @@ def test_eval_is_reproducible_with_same_seed() -> None:
     first = run_eval(cfg)
     second = run_eval(cfg)
     assert first == second
+
+
+def test_eval_can_write_json_report(tmp_path) -> None:
+    out = tmp_path / "eval_report.json"
+    summary = run_eval(
+        EvalConfig(
+            maps=["default"],
+            episodes_per_map=1,
+            max_steps=80,
+            seed=5,
+            policy_mode="autopilot",
+            dynamic_obstacle_count=0,
+            json_out=str(out),
+        )
+    )
+    assert out.exists()
+    assert "default" in summary["per_map"]
