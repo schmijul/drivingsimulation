@@ -1,4 +1,4 @@
-.PHONY: run test train train-auto eval install-dev
+.PHONY: run test train train-auto eval eval-compare install-dev
 PY := PYTHONUNBUFFERED=1 PYTHONPATH=src python3
 MODE ?= live
 
@@ -25,3 +25,6 @@ train-auto:
 
 eval:
 	$(PY) -m drivesim.ml.eval
+
+eval-compare:
+	$(PY) -m drivesim.ml.eval --policy both

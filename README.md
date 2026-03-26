@@ -135,6 +135,12 @@ Compare assistant vs autopilot in one run:
 PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze,blocks --episodes 6 --seed 11 --policy both
 ```
 
+Shortcut:
+
+```bash
+make eval-compare
+```
+
 Write a JSON report for experiment tracking:
 
 ```bash
@@ -156,3 +162,4 @@ PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze --episodes 6 --se
 - `make train MODE=replay`: train from replay log
 - `make train-auto`: run headless self-training over many episodes
 - `make eval`: run headless evaluation with fixed-seed metrics
+- `make eval-compare`: compare assistant vs autopilot in one headless run
