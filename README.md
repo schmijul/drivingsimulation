@@ -147,6 +147,12 @@ Write a JSON report for experiment tracking:
 PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze --episodes 6 --seed 11 --json-out replays/eval_latest.json
 ```
 
+Auto-generate a timestamped report path:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.eval --policy both --json-auto
+```
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data
@@ -163,3 +169,4 @@ PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze --episodes 6 --se
 - `make train-auto`: run headless self-training over many episodes
 - `make eval`: run headless evaluation with fixed-seed metrics
 - `make eval-compare`: compare assistant vs autopilot in one headless run
+- `make eval-report`: compare policies and auto-save timestamped JSON to `replays/evals/`

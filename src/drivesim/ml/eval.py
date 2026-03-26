@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import datetime
 import json
 from pathlib import Path
 
@@ -21,6 +22,12 @@ class EvalConfig:
     model_path: str = "models/assist_policy.npz"
     dynamic_obstacle_count: int = 2
     json_out: str = ""
+
+
+def default_eval_report_path(policy_mode: str, seed: int, now: datetime | None = None) -> str:
+    stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
+    safe_policy = policy_mode.replace("/", "-")
+    return f"replays/evals/eval_{safe_policy}_seed{seed}_{stamp}.json"
 
 
 def _episode_metrics(env: DriveSimEnv, policy_mode: str, agent: AssistAgent, episode_seed: int) -> dict[str, float | bool | int]:
@@ -197,7 +204,16 @@ def main() -> None:
     parser.add_argument("--model", default="models/assist_policy.npz", help="Assistant model path")
     parser.add_argument("--dynamic-obstacles", type=int, default=2, help="Dynamic obstacles per episode")
     parser.add_argument("--json-out", default="", help="Optional path to write evaluation summary JSON")
+    parser.add_argument(
+        "--json-auto",
+        action="store_true",
+        help="Auto-write JSON report to replays/evals with a timestamped filename",
+    )
     args = parser.parse_args()
+
+    json_out = args.json_out
+    if args.json_auto and not json_out:
+        json_out = default_eval_report_path(args.policy, args.seed)
 
     maps = [m.strip() for m in args.maps.split(",") if m.strip()]
     cfg = EvalConfig(
@@ -208,7 +224,7 @@ def main() -> None:
         policy_mode=args.policy,
         model_path=args.model,
         dynamic_obstacle_count=args.dynamic_obstacles,
-        json_out=args.json_out,
+        json_out=json_out,
     )
     if cfg.policy_mode == "both":
         summary = run_eval_compare(cfg)

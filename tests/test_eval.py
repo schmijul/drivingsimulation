@@ -1,4 +1,6 @@
-from drivesim.ml.eval import EvalConfig, run_eval, run_eval_compare
+from datetime import datetime
+
+from drivesim.ml.eval import EvalConfig, default_eval_report_path, run_eval, run_eval_compare
 
 
 def test_eval_returns_expected_metrics() -> None:
@@ -80,3 +82,8 @@ def test_eval_compare_can_write_json(tmp_path) -> None:
         )
     )
     assert out.exists()
+
+
+def test_default_eval_report_path_contains_policy_seed_and_timestamp() -> None:
+    path = default_eval_report_path("both", 11, now=datetime(2026, 3, 26, 14, 5, 7))
+    assert path == "replays/evals/eval_both_seed11_20260326-140507.json"
