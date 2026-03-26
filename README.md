@@ -166,6 +166,11 @@ PYTHONPATH=src python3 -m drivesim.ml.eval_history --sort success --limit 20
 PYTHONPATH=src python3 -m drivesim.ml.eval_history --best
 ```
 
+For compare reports (`policy=both`), history rows include delta columns:
+- `ds`: success-rate delta (assistant - autopilot)
+- `dc`: collision-rate delta (assistant - autopilot)
+- `dr`: reward delta (assistant - autopilot)
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data

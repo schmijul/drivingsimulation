@@ -6,6 +6,26 @@ from pathlib import Path
 from typing import Any
 
 
+def _summary_block(row: dict[str, Any]) -> dict[str, Any]:
+    summary = row.get("summary", {})
+    if isinstance(summary, dict) and "assistant" in summary:
+        assistant = summary.get("assistant", {})
+        if isinstance(assistant, dict):
+            return assistant
+    if isinstance(summary, dict):
+        return summary
+    return {}
+
+
+def _delta_block(row: dict[str, Any]) -> dict[str, Any]:
+    summary = row.get("summary", {})
+    if isinstance(summary, dict):
+        delta = summary.get("delta_assistant_minus_autopilot", {})
+        if isinstance(delta, dict):
+            return delta
+    return {}
+
+
 def load_history(path: str) -> list[dict[str, Any]]:
     p = Path(path)
     if not p.exists():
@@ -23,18 +43,25 @@ def sort_history(rows: list[dict[str, Any]], sort_by: str) -> list[dict[str, Any
     if sort_by == "success":
         return sorted(
             rows,
-            key=lambda r: float(r.get("summary", {}).get("success_rate", 0.0)),
+            key=lambda r: float(_summary_block(r).get("success_rate", 0.0)),
             reverse=True,
         )
     return sorted(rows, key=lambda r: str(r.get("ts", "")), reverse=True)
 
 
 def format_row(row: dict[str, Any]) -> str:
-    summary = row.get("summary", {})
+    summary = _summary_block(row)
+    delta = _delta_block(row)
     success = float(summary.get("success_rate", 0.0))
     collision = float(summary.get("collision_rate", 0.0))
     reward = float(summary.get("avg_total_reward", 0.0))
     episodes = int(float(summary.get("episodes", 0.0)))
+    delta_txt = ""
+    if delta:
+        ds = float(delta.get("success_rate", 0.0))
+        dc = float(delta.get("collision_rate", 0.0))
+        dr = float(delta.get("avg_total_reward", 0.0))
+        delta_txt = f"  ds={ds:+5.1%}  dc={dc:+5.1%}  dr={dr:+8.3f}"
     return (
         f"{row.get('ts', '-'):<19}  "
         f"{str(row.get('policy_mode', '-')):<10}  "
@@ -43,6 +70,7 @@ def format_row(row: dict[str, Any]) -> str:
         f"coll={collision:5.1%}  "
         f"rew={reward:8.3f}  "
         f"{row.get('report_path', '-')}"
+        f"{delta_txt}"
     )
 
 
@@ -68,7 +96,7 @@ def main() -> None:
         print("no eval history entries")
         return
 
-    print("timestamp             policy      episodes  success   collision   reward     report")
+    print("timestamp             policy      episodes  success   collision   reward     report [delta for policy=both]")
     for row in rows:
         print(format_row(row))
 
