@@ -22,6 +22,7 @@ dev = [
 drivesim-run = "drivesim.main:main"
 drivesim-demo = "drivesim.main:main"
 drivesim-train = "drivesim.ml.train:main"
+drivesim-train-anyone = "drivesim.ml.train_anyone:main"
 drivesim-train-auto = "drivesim.ml.train_auto:main"
 drivesim-eval = "drivesim.ml.eval:main"
 drivesim-eval-history = "drivesim.ml.eval_history:main"

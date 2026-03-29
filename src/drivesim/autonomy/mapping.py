@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from drivesim.autonomy.sensors import LidarObservation
-from drivesim.core.types import VehicleState, World
+from drivesim.core.types import DynamicObstacle, Obstacle, VehicleState, World
 
 
 class OccupancyGridMapper:
@@ -12,6 +12,7 @@ class OccupancyGridMapper:
         self.cols = int(world.width // resolution) + 1
         self.rows = int(world.height // resolution) + 1
         self.grid = np.zeros((self.rows, self.cols), dtype=np.float32)
+        self.bake_world_obstacles(world)
 
     def ensure_world_size(self, width: float, height: float) -> None:
         new_cols = int(width // self.resolution) + 1
@@ -35,6 +36,22 @@ class OccupancyGridMapper:
     def mark_occupied(self, x: float, y: float) -> None:
         gy, gx = self.world_to_grid(x, y)
         self.grid[gy, gx] = min(1.0, self.grid[gy, gx] + 0.45)
+
+    def _mark_rect_occupied(self, obs: Obstacle | DynamicObstacle, inflate: float = 0.0) -> None:
+        min_x = max(0.0, obs.x - inflate)
+        min_y = max(0.0, obs.y - inflate)
+        max_x = obs.x + obs.w + inflate
+        max_y = obs.y + obs.h + inflate
+        gy0, gx0 = self.world_to_grid(min_x, min_y)
+        gy1, gx1 = self.world_to_grid(max_x, max_y)
+        self.grid[gy0 : gy1 + 1, gx0 : gx1 + 1] = 1.0
+
+    def bake_world_obstacles(self, world: World, include_dynamic: bool = False, inflate: float = 2.0) -> None:
+        for obs in world.obstacles:
+            self._mark_rect_occupied(obs, inflate=inflate)
+        if include_dynamic:
+            for obs in world.dynamic_obstacles:
+                self._mark_rect_occupied(obs, inflate=inflate)
 
     def update(self, pose: VehicleState, obs: LidarObservation) -> np.ndarray:
         for angle, distance in zip(obs.angles, obs.distances):

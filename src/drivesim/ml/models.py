@@ -7,7 +7,7 @@ from typing import Protocol
 import numpy as np
 
 from drivesim.core.types import Action
-from drivesim.ml.policy import LinearPolicy, features_from_observation
+from drivesim.ml.policy import LinearPolicy, features_for_dim
 
 
 class PolicyModel(Protocol):
@@ -37,7 +37,7 @@ class TinyMLPPolicyModel:
     model_name: str = "tiny_mlp"
 
     def act(self, observation: dict) -> Action:
-        x = features_from_observation(observation).astype(np.float32)
+        x = features_for_dim(observation, int(self.feature_mean.shape[0])).astype(np.float32)
         x = (x - self.feature_mean) / self.feature_std
         h = np.tanh(x @ self.w1 + self.b1)
         out = h @ self.w2 + self.b2

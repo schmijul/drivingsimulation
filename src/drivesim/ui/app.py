@@ -61,6 +61,14 @@ def run_app() -> None:
     start_mode = os.getenv("DRIVESIM_START_MODE", "").strip().lower()
     if start_mode in modes:
         mode = start_mode
+    start_view = os.getenv("DRIVESIM_START_VIEW", "").strip().lower()
+    if start_view in driving_views:
+        current_view = driving_views.index(start_view)
+        renderer.set_driving_view(driving_views[current_view])
+    start_camera = os.getenv("DRIVESIM_START_CAMERA", "").strip().lower()
+    if start_camera in camera_modes:
+        current_camera = camera_modes.index(start_camera)
+        renderer.set_camera_mode(camera_modes[current_camera])
 
     running = True
     while running:

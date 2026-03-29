@@ -79,27 +79,34 @@ class DriveSimEnv:
                 return False
         return True
 
-    def _sample_free_point(self, rng: np.random.Generator, tries: int = 200) -> tuple[float, float]:
+    def _sample_free_point(self, rng: np.random.Generator, tries: int = 200, margin: float = 14.0) -> tuple[float, float]:
         for _ in range(tries):
             x = float(rng.uniform(20.0, self.world.width - 20.0))
             y = float(rng.uniform(20.0, self.world.height - 20.0))
-            if self._point_is_free(x, y):
+            if self._point_is_free(x, y, margin=margin):
                 return x, y
         return self.world.start
+
+    def _has_reachable_path(self, start: tuple[float, float], goal: tuple[float, float], min_nodes: int = 8) -> bool:
+        sgy, sgx = self.mapper.world_to_grid(start[0], start[1])
+        ggy, ggx = self.mapper.world_to_grid(goal[0], goal[1])
+        path = self.planner.plan(self.mapper.grid, (sgy, sgx), (ggy, ggx))
+        return len(path) >= min_nodes
 
     def randomize_episode(
         self,
         rng: np.random.Generator | None = None,
-        min_goal_distance: float = 220.0,
+        min_goal_distance: float = 160.0,
     ) -> Dict:
         rng = rng or self._rng
-        start = self._sample_free_point(rng)
+        start = self._sample_free_point(rng, margin=22.0)
         goal = start
         for _ in range(120):
-            cand = self._sample_free_point(rng)
+            cand = self._sample_free_point(rng, margin=22.0)
             if math.hypot(cand[0] - start[0], cand[1] - start[1]) >= min_goal_distance:
-                goal = cand
-                break
+                if self._has_reachable_path(start, cand):
+                    goal = cand
+                    break
             goal = cand
 
         self.world.start = start
@@ -107,6 +114,10 @@ class DriveSimEnv:
         self.sim = Simulator(self.world)
         self._steps = 0
         state = self.sim.get_state()
+        goal_heading = math.atan2(goal[1] - start[1], goal[0] - start[0])
+        yaw_noise = float(rng.normal(0.0, 0.55))
+        state.vehicle.yaw = float(((goal_heading + yaw_noise + math.pi) % (2.0 * math.pi)) - math.pi)
+        state.vehicle.speed = 0.0
         return self._observation(state)
 
     def _chunk_counts(self) -> tuple[int, int]:

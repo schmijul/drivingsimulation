@@ -21,6 +21,7 @@ DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 - Dynamic moving obstacles with online replanning support
 - Episode replay logging as JSONL
 - Deterministic `reset(seed=...)` behavior for reproducible experiments
+- One-command BC+DAgger training workflow for first-time users (`train-anyone`)
 
 ## Quickstart
 
@@ -45,6 +46,18 @@ Viewer controls:
 - `H`: toggle controls overlay
 - `C`: clear replay log (`replays/latest_episode.jsonl`)
 - `ESC`: quit
+
+Start directly in 3D camera mode:
+
+```bash
+DRIVESIM_START_VIEW=3d drivesim-run
+```
+
+Start directly in assistant mode + 3D camera:
+
+```bash
+DRIVESIM_START_MODE=assistant DRIVESIM_START_VIEW=3d drivesim-run
+```
 
 ## Architecture
 - `drivesim.core`: world model, vehicle, simulation loop
@@ -97,6 +110,46 @@ PYTHONPATH=src python3 -m drivesim.ml.train_auto --map maze --iterations 20 --po
 The trained model is saved to `models/assist_policy.npz` and is automatically used by `assistant` mode.
 The command prints live training progress with candidate-level updates and ETA.
 Use `--quiet` if you only want per-iteration summaries.
+
+## One-command trainer for anyone (recommended)
+If you want a reliable default pipeline without hand-tuning, use the BC+DAgger trainer:
+
+```bash
+make train-anyone
+# equivalent:
+PYTHONPATH=src python3 -m drivesim.ml.train_anyone
+```
+
+Pass custom options through make:
+
+```bash
+make train-anyone TRAIN_ANYONE_ARGS="--profile strong --maps default,maze,blocks"
+```
+
+What it does:
+- collects supervised driving data from the built-in autopilot on multiple maps
+- trains a compact `tiny_mlp` policy with behavior cloning
+- runs DAgger-style refinement rounds to reduce drift
+- saves `models/assist_policy.npz`
+- prints a final headless evaluation summary
+
+Useful presets:
+
+```bash
+# ultra-fast smoke run
+PYTHONPATH=src python3 -m drivesim.ml.train_anyone --profile quick
+
+# stronger training pass (more episodes, slower)
+PYTHONPATH=src python3 -m drivesim.ml.train_anyone --profile strong
+```
+
+The default `standard` profile is tuned for a better speed/quality balance on multi-map training.
+
+3D validation after training:
+
+```bash
+DRIVESIM_START_MODE=assistant DRIVESIM_START_VIEW=3d make run
+```
 
 ## Live training in the UI
 Default:
@@ -184,9 +237,12 @@ For compare reports (`policy=both`), history rows include delta columns:
 - `make test`: run test suite
 - `make train`: start visible `train-live` mode (default `MODE=live`)
 - `make train MODE=live`: open UI directly in visible `train-live` mode
+- `make train MODE=anyone`: run one-command BC+DAgger trainer
 - `make train MODE=auto`: run headless self-training
 - `make train MODE=replay`: train from replay log
+- `make train-anyone`: run one-command BC+DAgger trainer
 - `make train-auto`: run headless self-training over many episodes
+- `make demo-3d`: start UI directly in 3D camera mode
 - `make eval`: run headless evaluation with fixed-seed metrics
 - `make eval-compare`: compare assistant vs autopilot in one headless run
 - `make eval-report`: compare policies and auto-save timestamped JSON to `replays/evals/`

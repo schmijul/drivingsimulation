@@ -1,6 +1,6 @@
 import numpy as np
 
-from drivesim.ml.policy import fit_linear_policy
+from drivesim.ml.policy import features_from_observation, fit_linear_policy
 
 
 def test_fit_linear_policy_predict_shape() -> None:
@@ -14,3 +14,14 @@ def test_fit_linear_policy_predict_shape() -> None:
 
     assert pred.shape == (8, 2)
     assert np.isfinite(pred).all()
+
+
+def test_features_from_observation_returns_fixed_size_vector() -> None:
+    obs = {
+        "pose": np.array([10.0, 5.0, 0.2, 3.0], dtype=np.float32),
+        "goal": np.array([40.0, 25.0], dtype=np.float32),
+        "lidar": np.linspace(2.0, 80.0, num=41, dtype=np.float32),
+    }
+    feats = features_from_observation(obs)
+    assert feats.shape == (14,)
+    assert np.isfinite(feats).all()
