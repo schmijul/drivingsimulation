@@ -7,6 +7,25 @@ DriveSim is a stylized 2D driving and autonomy simulator with an ML-ready API.
 ![DriveSim 2D split view](imgs/2dview.png)
 ![DriveSim isometric split view](imgs/3dview.png)
 
+## Quick Visual Tour
+
+### Driving Cameras
+![DriveSim chase camera](imgs/readme/drive_chase_ground_truth.png)
+![DriveSim 3D-style isometric camera](imgs/readme/drive_iso_ground_truth.png)
+![DriveSim topdown camera with controls](imgs/readme/drive_topdown_ground_truth.png)
+
+### Mapping Modes
+Ground-truth occupancy mode:
+
+![DriveSim ground-truth occupancy map](imgs/readme/map_ground_truth.png)
+
+Sensor-driven occupancy mode:
+
+![DriveSim sensor-driven occupancy map](imgs/readme/map_sensor_driven.png)
+
+### Live Training HUD
+![DriveSim live training status](imgs/readme/train_live_status.png)
+
 ## Features (v0.1)
 - Deterministic 2D simulator with vehicle kinematics and collision handling
 - Lidar-style raycast sensing
@@ -88,6 +107,12 @@ Run workflow-focused coverage (replay training, model save/load, trained assista
 
 ```bash
 make test-workflows
+```
+
+Refresh README screenshots from deterministic scripted captures:
+
+```bash
+make docs-media
 ```
 
 ## ML training workflow (assistant policy)
@@ -255,6 +280,9 @@ For compare reports (`policy=both`), history rows include delta columns:
 - `make install-dev`: install editable package with dev dependencies
 - `make run`: start the simulator UI
 - `make test`: run test suite
+- `make test-workflows`: run workflow-focused tests (train/model/eval coverage)
+- `make docs-media`: regenerate README media assets under `imgs/readme/`
+- `make docs-media-clean`: remove generated README media assets
 - `make train`: start visible `train-live` mode (default `MODE=live`)
 - `make train MODE=live`: open UI directly in visible `train-live` mode
 - `make train MODE=anyone`: run one-command BC+DAgger trainer

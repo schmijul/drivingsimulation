@@ -1,4 +1,4 @@
-.PHONY: run demo-3d test test-workflows train train-auto train-anyone eval eval-compare eval-report eval-history eval-best install install-dev
+.PHONY: run demo-3d test test-workflows docs-media docs-media-clean docs-media-check train train-auto train-anyone eval eval-compare eval-report eval-history eval-best install install-dev
 PY := PYTHONUNBUFFERED=1 PYTHONPATH=src python3
 MODE ?= live
 TRAIN_ANYONE_ARGS ?=
@@ -24,6 +24,20 @@ test:
 
 test-workflows:
 	$(PY) -m pytest tests/test_train.py tests/test_models.py tests/test_agent.py tests/test_eval.py
+
+docs-media:
+	$(PY) scripts/generate_readme_media.py
+
+docs-media-clean:
+	rm -rf imgs/readme
+
+docs-media-check:
+	test -f imgs/readme/drive_chase_ground_truth.png
+	test -f imgs/readme/drive_iso_ground_truth.png
+	test -f imgs/readme/drive_topdown_ground_truth.png
+	test -f imgs/readme/map_ground_truth.png
+	test -f imgs/readme/map_sensor_driven.png
+	test -f imgs/readme/train_live_status.png
 
 train:
 ifeq ($(MODE),live)
