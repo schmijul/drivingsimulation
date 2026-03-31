@@ -1,6 +1,8 @@
 from datetime import datetime
 import json
 
+import numpy as np
+
 from drivesim.ml.eval import (
     EvalConfig,
     _append_eval_history,
@@ -8,6 +10,7 @@ from drivesim.ml.eval import (
     run_eval,
     run_eval_compare,
 )
+from drivesim.ml.models import TinyMLPPolicyModel
 
 
 def test_eval_returns_expected_metrics() -> None:
@@ -56,6 +59,41 @@ def test_eval_can_write_json_report(tmp_path) -> None:
         )
     )
     assert out.exists()
+    assert "default" in summary["per_map"]
+
+
+def test_eval_assistant_with_trained_model_path_writes_config_and_summary(tmp_path) -> None:
+    model_path = tmp_path / "assist_policy.npz"
+    model = TinyMLPPolicyModel(
+        w1=np.zeros((14, 6), dtype=np.float32),
+        b1=np.zeros(6, dtype=np.float32),
+        w2=np.zeros((6, 2), dtype=np.float32),
+        b2=np.array([0.0, 0.0], dtype=np.float32),
+        feature_mean=np.zeros(14, dtype=np.float32),
+        feature_std=np.ones(14, dtype=np.float32),
+    )
+    model.save(str(model_path))
+
+    out = tmp_path / "trained_eval.json"
+    summary = run_eval(
+        EvalConfig(
+            maps=["default"],
+            episodes_per_map=1,
+            max_steps=80,
+            seed=8,
+            policy_mode="assistant",
+            model_path=str(model_path),
+            dynamic_obstacle_count=0,
+            mapping_mode="sensor_driven",
+            json_out=str(out),
+        )
+    )
+    assert out.exists()
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["config"]["model_path"] == str(model_path)
+    assert payload["config"]["policy_mode"] == "assistant"
+    assert payload["config"]["mapping_mode"] == "sensor_driven"
+    assert "summary" in payload
     assert "default" in summary["per_map"]
 
 

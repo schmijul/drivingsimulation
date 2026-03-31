@@ -1,4 +1,4 @@
-.PHONY: run demo-3d test train train-auto train-anyone eval eval-compare eval-report eval-history eval-best install install-dev
+.PHONY: run demo-3d test test-workflows train train-auto train-anyone eval eval-compare eval-report eval-history eval-best install install-dev
 PY := PYTHONUNBUFFERED=1 PYTHONPATH=src python3
 MODE ?= live
 TRAIN_ANYONE_ARGS ?=
@@ -21,6 +21,9 @@ run:
 
 test:
 	$(PY) -m pytest
+
+test-workflows:
+	$(PY) -m pytest tests/test_train.py tests/test_models.py tests/test_agent.py tests/test_eval.py
 
 train:
 ifeq ($(MODE),live)

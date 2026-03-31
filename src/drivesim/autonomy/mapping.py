@@ -7,12 +7,16 @@ from drivesim.core.types import DynamicObstacle, Obstacle, VehicleState, World
 
 
 class OccupancyGridMapper:
-    def __init__(self, world: World, resolution: float = 8.0):
+    def __init__(self, world: World, resolution: float = 8.0, mapping_mode: str = "ground_truth"):
         self.resolution = resolution
+        if mapping_mode not in {"ground_truth", "sensor_driven"}:
+            raise ValueError(f"unsupported mapping_mode: {mapping_mode!r}")
+        self.mapping_mode = mapping_mode
         self.cols = int(world.width // resolution) + 1
         self.rows = int(world.height // resolution) + 1
         self.grid = np.zeros((self.rows, self.cols), dtype=np.float32)
-        self.bake_world_obstacles(world)
+        if self.mapping_mode == "ground_truth":
+            self.bake_world_obstacles(world)
 
     def ensure_world_size(self, width: float, height: float) -> None:
         new_cols = int(width // self.resolution) + 1

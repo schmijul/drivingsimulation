@@ -21,6 +21,7 @@ class EvalConfig:
     policy_mode: str = "assistant"
     model_path: str = "models/assist_policy.npz"
     dynamic_obstacle_count: int = 2
+    mapping_mode: str = "ground_truth"
     json_out: str = ""
 
 
@@ -112,6 +113,7 @@ def run_eval(cfg: EvalConfig) -> dict[str, object]:
                 auto_expand=False,
                 dynamic_obstacle_count=cfg.dynamic_obstacle_count,
                 seed=cfg.seed,
+                mapping_mode=cfg.mapping_mode,
             )
         )
         for _ in range(cfg.episodes_per_map):
@@ -138,6 +140,7 @@ def run_eval(cfg: EvalConfig) -> dict[str, object]:
                         "policy_mode": cfg.policy_mode,
                         "model_path": cfg.model_path,
                         "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
+                        "mapping_mode": cfg.mapping_mode,
                     },
                     "summary": result,
                 },
@@ -160,6 +163,7 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
         policy_mode="assistant",
         model_path=cfg.model_path,
         dynamic_obstacle_count=cfg.dynamic_obstacle_count,
+        mapping_mode=cfg.mapping_mode,
         json_out="",
     )
     autopilot_cfg = EvalConfig(
@@ -170,6 +174,7 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
         policy_mode="autopilot",
         model_path=cfg.model_path,
         dynamic_obstacle_count=cfg.dynamic_obstacle_count,
+        mapping_mode=cfg.mapping_mode,
         json_out="",
     )
     assistant = run_eval(assistant_cfg)
@@ -200,6 +205,7 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
                         "policy_mode": "both",
                         "model_path": cfg.model_path,
                         "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
+                        "mapping_mode": cfg.mapping_mode,
                     },
                     "summary": result,
                 },
@@ -216,6 +222,7 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
             policy_mode="both",
             model_path=cfg.model_path,
             dynamic_obstacle_count=cfg.dynamic_obstacle_count,
+            mapping_mode=cfg.mapping_mode,
             json_out=cfg.json_out,
         )
         _append_eval_history(Path("replays/evals/index.jsonl"), str(out_path), history_cfg, result)
@@ -236,6 +243,12 @@ def main() -> None:
     )
     parser.add_argument("--model", default="models/assist_policy.npz", help="Assistant model path")
     parser.add_argument("--dynamic-obstacles", type=int, default=2, help="Dynamic obstacles per episode")
+    parser.add_argument(
+        "--mapping-mode",
+        choices=["ground_truth", "sensor_driven"],
+        default="ground_truth",
+        help="Occupancy mapping mode",
+    )
     parser.add_argument("--json-out", default="", help="Optional path to write evaluation summary JSON")
     parser.add_argument(
         "--json-auto",
@@ -257,6 +270,7 @@ def main() -> None:
         policy_mode=args.policy,
         model_path=args.model,
         dynamic_obstacle_count=args.dynamic_obstacles,
+        mapping_mode=args.mapping_mode,
         json_out=json_out,
     )
     if cfg.policy_mode == "both":

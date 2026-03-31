@@ -6,7 +6,7 @@ import pygame
 
 from drivesim.core.types import Action
 from drivesim.ml.agent import AssistAgent
-from drivesim.ml.env import DriveSimEnv
+from drivesim.ml.env import DriveSimEnv, EnvConfig
 from drivesim.ml.live_train import LivePolicyTrainer
 from drivesim.ml.models import LinearPolicyModel
 from drivesim.ml.policy import features_from_observation
@@ -31,7 +31,11 @@ def _manual_action(keys: pygame.key.ScancodeWrapper) -> Action:
 
 def run_app() -> None:
     pygame.init()
-    env = DriveSimEnv()
+    start_mapping_mode = os.getenv("DRIVESIM_MAPPING_MODE", "").strip().lower()
+    if start_mapping_mode in {"ground_truth", "sensor_driven"}:
+        env = DriveSimEnv(EnvConfig(mapping_mode=start_mapping_mode))
+    else:
+        env = DriveSimEnv()
     agent = AssistAgent()
     logger = ReplayLogger()
 

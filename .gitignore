@@ -2,6 +2,12 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.coverage
 replays/
 models/
-src/*.egg-info/
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+package-lock.json

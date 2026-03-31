@@ -76,7 +76,7 @@ class Renderer2D(RenderBackend):
             True,
             TEXT,
         )
-        right_title = self.title_font.render("Live SLAM Map", True, TEXT)
+        right_title = self.title_font.render("Live Occupancy Map", True, TEXT)
         screen.blit(left_title, (left_rect.x + 8, self.margin + 4))
         screen.blit(right_title, (right_rect.x + 8, self.margin + 4))
         return left_rect, right_rect
@@ -425,7 +425,7 @@ class Renderer2D(RenderBackend):
         x = self.width - 272
         y = self.height - 132
         surf.blit(panel, (x, y))
-        title = self.font.render("SLAM Legend", True, TEXT)
+        title = self.font.render("Occupancy Legend", True, TEXT)
         surf.blit(title, (x + 10, y + 10))
 
         explored = float(np.count_nonzero(grid > 0.08)) / float(grid.size)

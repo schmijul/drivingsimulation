@@ -54,8 +54,8 @@ class LivePolicyTrainer:
         seeded = LinearPolicy(
             weights=policy.weights.copy(),
             bias=policy.bias.copy(),
-            feature_mean=np.zeros(self.feature_dim, dtype=np.float32),
-            feature_std=np.ones(self.feature_dim, dtype=np.float32),
+            feature_mean=policy.feature_mean.copy(),
+            feature_std=policy.feature_std.copy(),
         )
         self.current_model = LinearPolicyModel(policy=seeded)
         self.best_model_state = seeded

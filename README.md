@@ -1,6 +1,6 @@
 # DriveSim
 
-DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
+DriveSim is a stylized 2D driving and autonomy simulator with an ML-ready API.
 
 ## Current UI Snapshots
 
@@ -10,11 +10,11 @@ DriveSim is a stylized 2D driving and SLAM simulator with an ML-ready API.
 ## Features (v0.1)
 - Deterministic 2D simulator with vehicle kinematics and collision handling
 - Lidar-style raycast sensing
-- Occupancy-grid mapping as a SLAM building block
+- Occupancy-grid mapping with selectable modes (`ground_truth` / `sensor_driven`)
 - Cost-aware A* path planning (with smoothing) and a lightweight path-following controller
 - Gym-like environment API (`reset`, `step`)
 - Stylized Pygame visualization for demo and debugging
-- Side-by-side driving view and live SLAM map view
+- Side-by-side driving view and live occupancy map view
 - Chase (default), 3D-style isometric, and top-down driving cameras
 - Multiple map presets (`default`, `maze`, `blocks`, `generated_easy`, `generated_medium`, `generated_hard`) switchable at runtime
 - Optional chunk-based world expansion while driving
@@ -59,6 +59,12 @@ Start directly in assistant mode + 3D camera:
 DRIVESIM_START_MODE=assistant DRIVESIM_START_VIEW=3d drivesim-run
 ```
 
+Start with sensor-driven occupancy mapping:
+
+```bash
+DRIVESIM_MAPPING_MODE=sensor_driven drivesim-run
+```
+
 ## Architecture
 - `drivesim.core`: world model, vehicle, simulation loop
 - `drivesim.autonomy`: sensing, mapping, planning, control
@@ -76,6 +82,12 @@ Model definitions live in [models.py](src/drivesim/ml/models.py):
 
 ```bash
 pytest
+```
+
+Run workflow-focused coverage (replay training, model save/load, trained assistant path, eval with model file):
+
+```bash
+make test-workflows
 ```
 
 ## ML training workflow (assistant policy)
@@ -172,6 +184,8 @@ Run fixed-seed, headless evaluation and report benchmark metrics:
 - average steps and episode reward
 - per-map breakdown (`default`, `maze`, etc.)
 
+Mapping mode defaults to `ground_truth` and can be switched with `--mapping-mode sensor_driven`.
+
 ```bash
 make eval
 ```
@@ -180,6 +194,12 @@ Custom example:
 
 ```bash
 PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze,blocks --episodes 6 --seed 11 --policy assistant
+```
+
+Sensor-driven evaluation example:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze --episodes 4 --mapping-mode sensor_driven
 ```
 
 Compare assistant vs autopilot in one run:

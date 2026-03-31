@@ -25,16 +25,18 @@ class EnvConfig:
     dynamic_obstacle_count: int = 2
     dynamic_obstacle_speed: float = 52.0
     seed: int = 7
+    mapping_mode: str = "ground_truth"
 
 
 class DriveSimEnv:
     def __init__(self, config: EnvConfig | None = None):
         self.config = config or EnvConfig()
         self.map_name = self.config.map_name
+        self.mapping_mode = self.config.mapping_mode
         self.world = build_world(self.map_name)
         self.sim = Simulator(self.world)
         self.lidar = LidarSensor()
-        self.mapper = OccupancyGridMapper(self.world)
+        self.mapper = OccupancyGridMapper(self.world, mapping_mode=self.mapping_mode)
         self.planner = AStarPlanner()
         self.controller = PathController()
         self._steps = 0
@@ -57,7 +59,7 @@ class DriveSimEnv:
         self.map_name = map_name
         self.world = build_world(map_name)
         self.sim = Simulator(self.world)
-        self.mapper = OccupancyGridMapper(self.world)
+        self.mapper = OccupancyGridMapper(self.world, mapping_mode=self.mapping_mode)
         self._steps = 0
         self._expansion_seed = sum((i + 1) * ord(c) for i, c in enumerate(self.map_name))
         self._generated_chunks = set()
@@ -111,6 +113,7 @@ class DriveSimEnv:
 
         self.world.start = start
         self.world.goal = goal
+        self._spawn_dynamic_obstacles(rng_override=rng)
         self.sim = Simulator(self.world)
         self._steps = 0
         state = self.sim.get_state()
@@ -144,12 +147,13 @@ class DriveSimEnv:
     ) -> bool:
         return not (ax + aw <= bx or ax >= bx + bw or ay + ah <= by or ay >= by + bh)
 
-    def _spawn_dynamic_obstacles(self) -> None:
+    def _spawn_dynamic_obstacles(self, rng_override: np.random.Generator | None = None) -> None:
         self.world.dynamic_obstacles = []
         if self.dynamic_obstacle_count <= 0:
             return
 
-        base = int(self._rng.integers(0, 2**31 - 1))
+        base_rng = rng_override or self._rng
+        base = int(base_rng.integers(0, 2**31 - 1))
         seed = base + self._expansion_seed + int(self.world.width) * 11 + int(self.world.height) * 7
         rng = np.random.default_rng(seed)
         dynamic_obstacles = []
@@ -253,7 +257,7 @@ class DriveSimEnv:
         self._steps = 0
         self.world = build_world(self.map_name)
         self.sim = Simulator(self.world)
-        self.mapper = OccupancyGridMapper(self.world)
+        self.mapper = OccupancyGridMapper(self.world, mapping_mode=self.mapping_mode)
         self._generated_chunks = set()
         self._seed_existing_chunks()
         self._spawn_dynamic_obstacles()
@@ -320,5 +324,6 @@ class DriveSimEnv:
             "world_size": (self.world.width, self.world.height),
             "auto_expand": self.auto_expand,
             "dynamic_obstacles": len(self.world.dynamic_obstacles),
+            "mapping_mode": self.mapping_mode,
         }
         return obs, reward, done, info

@@ -123,8 +123,11 @@ def fit_linear_policy(features: np.ndarray, actions: np.ndarray, l2_reg: float =
     std = features.std(axis=0) + 1e-6
     x = (features - mean) / std
     n_features = x.shape[1]
-    eye = np.eye(n_features, dtype=np.float32)
-    xtx = x.T @ x + l2_reg * eye
-    w = np.linalg.solve(xtx, x.T @ actions)
-    b = actions.mean(axis=0)
-    return LinearPolicy(weights=w, bias=b, feature_mean=mean, feature_std=std)
+    ones = np.ones((x.shape[0], 1), dtype=np.float32)
+    design = np.concatenate([x, ones], axis=1)
+    reg = np.eye(n_features + 1, dtype=np.float32)
+    reg[-1, -1] = 0.0
+    coeffs = np.linalg.solve(design.T @ design + l2_reg * reg, design.T @ actions)
+    w = coeffs[:n_features]
+    b = coeffs[n_features]
+    return LinearPolicy(weights=w.astype(np.float32), bias=b.astype(np.float32), feature_mean=mean, feature_std=std)

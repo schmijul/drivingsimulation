@@ -71,3 +71,49 @@ def test_reset_seed_reproducible_randomized_episode() -> None:
     env.randomize_episode()
     second = (env.world.start, env.world.goal)
     assert first == second
+
+
+def test_randomize_episode_respawns_dynamic_obstacles_for_new_start_and_goal() -> None:
+    env = DriveSimEnv(EnvConfig(dynamic_obstacle_count=3, seed=17))
+    env.reset(seed=17)
+    env.randomize_episode(np.random.default_rng(123))
+
+    start = env.world.start
+    goal = env.world.goal
+    assert len(env.world.dynamic_obstacles) == 3
+    for obs in env.world.dynamic_obstacles:
+        assert np.hypot(obs.x - start[0], obs.y - start[1]) >= 85.0
+        assert np.hypot(obs.x - goal[0], obs.y - goal[1]) >= 70.0
+
+
+def test_randomize_episode_with_explicit_rng_is_fully_reproducible() -> None:
+    env_a = DriveSimEnv(EnvConfig(dynamic_obstacle_count=2, seed=17))
+    env_b = DriveSimEnv(EnvConfig(dynamic_obstacle_count=2, seed=999))
+
+    env_a.reset()
+    env_b.reset()
+    env_a.world.dynamic_obstacles = []
+    env_b.world.dynamic_obstacles = []
+    rng_a = np.random.default_rng(321)
+    rng_b = np.random.default_rng(321)
+    env_a.randomize_episode(rng=rng_a)
+    env_b.randomize_episode(rng=rng_b)
+
+    obstacles_a = [(o.x, o.y, o.w, o.h, o.vx, o.vy) for o in env_a.world.dynamic_obstacles]
+    obstacles_b = [(o.x, o.y, o.w, o.h, o.vx, o.vy) for o in env_b.world.dynamic_obstacles]
+
+    assert env_a.world.start == env_b.world.start
+    assert env_a.world.goal == env_b.world.goal
+    assert obstacles_a == obstacles_b
+
+
+def test_sensor_driven_mapping_starts_without_baked_obstacles() -> None:
+    gt_env = DriveSimEnv(EnvConfig(mapping_mode="ground_truth", dynamic_obstacle_count=0))
+    sd_env = DriveSimEnv(EnvConfig(mapping_mode="sensor_driven", dynamic_obstacle_count=0))
+
+    gt_obs = gt_env.reset(seed=9)
+    sd_obs = sd_env.reset(seed=9)
+
+    gt_high_conf_occ = int(np.sum(gt_obs["grid"] > 0.95))
+    sd_high_conf_occ = int(np.sum(sd_obs["grid"] > 0.95))
+    assert gt_high_conf_occ > sd_high_conf_occ
