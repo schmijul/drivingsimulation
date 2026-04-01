@@ -1,5 +1,8 @@
+import importlib
+
+import pytest
 from drivesim.core.types import Action
-from drivesim.ml.env import DriveSimEnv, EnvConfig
+from drivesim.ml.env import DriveSimEnv, DriveSimGymEnv, EnvConfig
 import numpy as np
 
 
@@ -117,3 +120,55 @@ def test_sensor_driven_mapping_starts_without_baked_obstacles() -> None:
     gt_high_conf_occ = int(np.sum(gt_obs["grid"] > 0.95))
     sd_high_conf_occ = int(np.sum(sd_obs["grid"] > 0.95))
     assert gt_high_conf_occ > sd_high_conf_occ
+
+
+def _require_gym_backend() -> None:
+    if importlib.util.find_spec("gymnasium") is None and importlib.util.find_spec("gym") is None:
+        pytest.skip("gymnasium/gym is not installed")
+
+
+def test_gym_wrapper_reset_and_step_contract() -> None:
+    _require_gym_backend()
+    env = DriveSimGymEnv(EnvConfig(dynamic_obstacle_count=0))
+
+    obs, info = env.reset(seed=4)
+    assert isinstance(info, dict)
+    assert "pose" in obs and "grid" in obs
+
+    next_obs, reward, terminated, truncated, step_info = env.step(np.array([0.2, 0.0], dtype=np.float32))
+    assert "lidar" in next_obs
+    assert isinstance(reward, float)
+    assert isinstance(terminated, bool)
+    assert isinstance(truncated, bool)
+    assert "distance_to_goal" in step_info
+
+
+def test_gym_wrapper_max_steps_sets_truncated() -> None:
+    _require_gym_backend()
+    env = DriveSimGymEnv(EnvConfig(dynamic_obstacle_count=0, max_steps=1))
+    env.reset(seed=3)
+
+    _, _, terminated, truncated, _ = env.step(np.array([0.0, 0.0], dtype=np.float32))
+
+    assert truncated
+    assert not terminated
+
+
+def test_gym_wrapper_clips_actions() -> None:
+    _require_gym_backend()
+    env = DriveSimGymEnv(EnvConfig(dynamic_obstacle_count=0))
+    env.reset(seed=5)
+
+    _, _, _, _, info = env.step(np.array([9.0, -9.0], dtype=np.float32))
+
+    assert info["steps"] == 1
+
+
+def test_gym_wrapper_can_flatten_observation() -> None:
+    _require_gym_backend()
+    env = DriveSimGymEnv(EnvConfig(dynamic_obstacle_count=0), observation_mode="flat")
+
+    obs, _ = env.reset(seed=6)
+
+    assert isinstance(obs, np.ndarray)
+    assert obs.shape == env.observation_space.shape

@@ -31,7 +31,7 @@ Sensor-driven occupancy mode:
 - Lidar-style raycast sensing
 - Occupancy-grid mapping with selectable modes (`ground_truth` / `sensor_driven`)
 - Cost-aware A* path planning (with smoothing) and a lightweight path-following controller
-- Gym-like environment API (`reset`, `step`)
+- Gym-like environment API (`reset`, `step`) plus optional Gym/Gymnasium adapter
 - Stylized Pygame visualization for demo and debugging
 - Side-by-side driving view and live occupancy map view
 - Chase (default), 3D-style isometric, and top-down driving cameras
@@ -49,6 +49,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 drivesim-run
+```
+
+For RL frameworks (Gym/Gymnasium API wrapper):
+
+```bash
+pip install -e .[dev,rl]
 ```
 
 Viewer controls:
@@ -87,8 +93,22 @@ DRIVESIM_MAPPING_MODE=sensor_driven drivesim-run
 ## Architecture
 - `drivesim.core`: world model, vehicle, simulation loop
 - `drivesim.autonomy`: sensing, mapping, planning, control
-- `drivesim.ml`: gym-like env, assistant agent, replay logger
+- `drivesim.ml`: gym-like env, Gym/Gymnasium wrapper, assistant agent, replay logger
 - `drivesim.ui`: renderer and interaction layer
+
+### Gym/Gymnasium compatibility
+
+```python
+import numpy as np
+from drivesim.ml.env import DriveSimGymEnv, EnvConfig
+
+env = DriveSimGymEnv(EnvConfig(map_name="maze", dynamic_obstacle_count=2))
+obs, info = env.reset(seed=7)
+
+action = np.array([0.5, 0.0], dtype=np.float32)
+obs, reward, terminated, truncated, info = env.step(action)
+done = terminated or truncated
+```
 
 ## Model architectures
 Model definitions live in [models.py](src/drivesim/ml/models.py):

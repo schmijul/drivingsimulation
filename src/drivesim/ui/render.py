@@ -12,36 +12,60 @@ from drivesim.ui.backend import RenderBackend
 
 Color = Tuple[int, int, int]
 
-BG: Color = (16, 19, 22)
-ROAD: Color = (31, 38, 44)
+# --- Refined dark palette ---------------------------------------------------
+BG: Color = (13, 15, 18)
+ROAD: Color = (28, 34, 40)
 OBSTACLE: Color = (82, 72, 58)
-GRID_FREE: Color = (38, 88, 68)
-GRID_OCC: Color = (190, 76, 66)
-CAR: Color = (255, 199, 102)
-GOAL: Color = (84, 212, 146)
-PATH: Color = (104, 163, 255)
-RAY: Color = (96, 142, 181)
-TEXT: Color = (238, 241, 245)
-PANEL_BG: Color = (10, 12, 15)
-PANEL_EDGE: Color = (58, 68, 78)
-MAP_BG: Color = (22, 26, 31)
-MUTED: Color = (173, 186, 199)
+GRID_FREE: Color = (34, 197, 128)
+GRID_OCC: Color = (239, 68, 68)
+CAR: Color = (250, 196, 80)
+CAR_OUTLINE: Color = (210, 160, 50)
+GOAL: Color = (52, 211, 153)
+GOAL_INNER: Color = (16, 185, 129)
+PATH: Color = (96, 165, 250)
+RAY: Color = (71, 115, 162)
+TEXT: Color = (241, 245, 249)
+TEXT_DIM: Color = (148, 163, 184)
+PANEL_BG: Color = (15, 18, 22)
+PANEL_EDGE: Color = (38, 45, 55)
+PANEL_HEADER: Color = (20, 24, 30)
+MAP_BG: Color = (18, 22, 28)
+MUTED: Color = (148, 163, 184)
 OBSTACLE_SIDE: Color = (60, 52, 42)
 OBSTACLE_TOP: Color = (118, 104, 88)
-GROUND_LINE: Color = (46, 52, 60)
+GROUND_LINE: Color = (38, 45, 55)
 OBSTACLE_CHASE_SIDE: Color = (70, 60, 48)
 OBSTACLE_CHASE_TOP: Color = (128, 112, 92)
-DYNAMIC_OBSTACLE: Color = (198, 122, 74)
-DYNAMIC_OBSTACLE_SIDE: Color = (150, 92, 58)
-DYNAMIC_OBSTACLE_TOP: Color = (220, 146, 88)
+DYNAMIC_OBSTACLE: Color = (251, 146, 60)
+DYNAMIC_OBSTACLE_SIDE: Color = (194, 110, 46)
+DYNAMIC_OBSTACLE_TOP: Color = (253, 186, 116)
+ACCENT_BLUE: Color = (59, 130, 246)
+ACCENT_GREEN: Color = (34, 197, 94)
+ACCENT_RED: Color = (239, 68, 68)
+ACCENT_AMBER: Color = (245, 158, 11)
+KEY_BG: Color = (30, 36, 44)
+KEY_BORDER: Color = (55, 65, 80)
+SEPARATOR: Color = (30, 36, 44)
+BADGE_MANUAL: Color = (59, 130, 246)
+BADGE_AUTOPILOT: Color = (168, 85, 247)
+BADGE_ASSISTANT: Color = (34, 197, 94)
+BADGE_TRAIN: Color = (245, 158, 11)
+
+
+def _lerp_color(a: Color, b: Color, t: float) -> Color:
+    return (
+        int(a[0] + (b[0] - a[0]) * t),
+        int(a[1] + (b[1] - a[1]) * t),
+        int(a[2] + (b[2] - a[2]) * t),
+    )
 
 
 class Renderer2D(RenderBackend):
     def __init__(self, width: int, height: int):
         self.width = width
         self.height = height
-        self.margin = 18
-        self.header = 34
+        self.margin = 16
+        self.header = 44
         self.driving_view = "chase"
         self.camera_mode = "follow"
         self.iso_scale = 0.72
@@ -49,8 +73,12 @@ class Renderer2D(RenderBackend):
         self.cam_x = width * 0.5
         self.cam_y = height * 0.5
         pygame.font.init()
-        self.font = pygame.font.SysFont("dejavusansmono", 16)
-        self.title_font = pygame.font.SysFont("dejavusansmono", 18, bold=True)
+        self.font = pygame.font.SysFont("dejavusans", 13)
+        self.font_mono = pygame.font.SysFont("dejavusansmono", 13)
+        self.title_font = pygame.font.SysFont("dejavusans", 14, bold=True)
+        self.hud_font = pygame.font.SysFont("dejavusans", 12)
+        self.badge_font = pygame.font.SysFont("dejavusans", 11, bold=True)
+        self.key_font = pygame.font.SysFont("dejavusansmono", 11, bold=True)
 
     def frame_size(self) -> tuple[int, int]:
         total_width = self.width * 2 + self.margin * 3
@@ -63,22 +91,54 @@ class Renderer2D(RenderBackend):
         right = pygame.Rect(self.margin * 2 + self.width, top, self.width, self.height)
         return left, right
 
+    def _draw_rounded_panel(
+        self, screen: pygame.Surface, rect: pygame.Rect, title: str, subtitle: str = ""
+    ) -> None:
+        outer = rect.inflate(6, 6)
+        # Shadow
+        shadow = pygame.Surface((outer.w + 8, outer.h + 8), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, (0, 0, 0, 40), shadow.get_rect(), border_radius=14)
+        screen.blit(shadow, (outer.x - 2, outer.y + 2))
+        # Panel body
+        pygame.draw.rect(screen, PANEL_BG, outer, border_radius=12)
+        pygame.draw.rect(screen, PANEL_EDGE, outer, width=1, border_radius=12)
+        # Header bar
+        header_h = 32
+        header_rect = pygame.Rect(outer.x + 1, outer.y + 1, outer.w - 2, header_h)
+        header_surf = pygame.Surface((header_rect.w, header_rect.h), pygame.SRCALPHA)
+        pygame.draw.rect(
+            header_surf,
+            (*PANEL_HEADER, 255),
+            header_surf.get_rect(),
+            border_top_left_radius=11,
+            border_top_right_radius=11,
+        )
+        screen.blit(header_surf, header_rect.topleft)
+        # Separator line under header
+        pygame.draw.line(
+            screen,
+            SEPARATOR,
+            (outer.x + 1, outer.y + header_h + 1),
+            (outer.x + outer.w - 2, outer.y + header_h + 1),
+        )
+        # Title text
+        title_surf = self.title_font.render(title, True, TEXT)
+        screen.blit(title_surf, (outer.x + 14, outer.y + 8))
+        if subtitle:
+            sub_surf = self.hud_font.render(subtitle, True, TEXT_DIM)
+            screen.blit(sub_surf, (outer.x + 14 + title_surf.get_width() + 10, outer.y + 10))
+
     def _draw_frame(self, screen: pygame.Surface) -> tuple[pygame.Rect, pygame.Rect]:
         screen.fill(BG)
         left_rect, right_rect = self._panel_rects()
-        for rect in (left_rect, right_rect):
-            pygame.draw.rect(screen, PANEL_BG, rect.inflate(8, 8), border_radius=18)
-            pygame.draw.rect(screen, PANEL_EDGE, rect.inflate(8, 8), width=2, border_radius=18)
 
-        view_label = "3d" if self.driving_view == "isometric" else self.driving_view
-        left_title = self.title_font.render(
-            f"Driving View ({view_label}, {self.camera_mode})",
-            True,
-            TEXT,
+        view_label = "3D" if self.driving_view == "isometric" else self.driving_view.capitalize()
+        cam_label = self.camera_mode.capitalize()
+        self._draw_rounded_panel(
+            screen, left_rect, "Driving View", f"{view_label} / {cam_label}"
         )
-        right_title = self.title_font.render("Live Occupancy Map", True, TEXT)
-        screen.blit(left_title, (left_rect.x + 8, self.margin + 4))
-        screen.blit(right_title, (right_rect.x + 8, self.margin + 4))
+        self._draw_rounded_panel(screen, right_rect, "Occupancy Map")
+
         return left_rect, right_rect
 
     def set_driving_view(self, view: str) -> None:
@@ -278,20 +338,23 @@ class Renderer2D(RenderBackend):
 
     def _draw_grid(self, surf: pygame.Surface, grid: np.ndarray, resolution: float) -> None:
         rows, cols = grid.shape
+        res = int(resolution)
         for gy in range(rows):
             for gx in range(cols):
                 p = float(grid[gy, gx])
                 if p < 0.08:
                     continue
                 if p > 0.5:
-                    color = GRID_OCC
-                    alpha = min(155, int(40 + p * 130))
+                    t = min(1.0, (p - 0.5) * 2.0)
+                    color = _lerp_color((180, 50, 50), GRID_OCC, t)
+                    alpha = min(180, int(60 + t * 120))
                 else:
-                    color = GRID_FREE
-                    alpha = min(95, int(20 + p * 120))
-                cell = pygame.Surface((resolution, resolution), pygame.SRCALPHA)
+                    t = min(1.0, p / 0.5)
+                    color = _lerp_color((25, 60, 45), GRID_FREE, t)
+                    alpha = min(120, int(20 + t * 100))
+                cell = pygame.Surface((res, res), pygame.SRCALPHA)
                 cell.fill((*color, alpha))
-                surf.blit(cell, (gx * resolution, gy * resolution))
+                surf.blit(cell, (gx * res, gy * res))
 
     def _draw_lidar(self, surf: pygame.Surface, state: SimState, lidar: LidarObservation) -> None:
         x, y = state.vehicle.x, state.vehicle.y
@@ -319,30 +382,40 @@ class Renderer2D(RenderBackend):
             esx, esy = self._chase_point(ex, ey, state)
             pygame.draw.line(surf, RAY, (sx, sy), (esx, esy), 1)
 
-    def _draw_path(self, surf: pygame.Surface, path: list[tuple[float, float]]) -> None:
-        if len(path) < 2:
+    def _draw_path_with_glow(self, surf: pygame.Surface, points: list[tuple[float, float]]) -> None:
+        if len(points) < 2:
             return
+        glow = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+        pygame.draw.lines(glow, (*PATH, 35), False, points, 8)
+        surf.blit(glow, (0, 0))
+        pygame.draw.lines(surf, PATH, False, points, 2)
+
+    def _draw_path(self, surf: pygame.Surface, path: list[tuple[float, float]]) -> None:
         projected = [self._topdown_point(x, y) for x, y in path]
-        pygame.draw.lines(surf, PATH, False, projected, 3)
+        self._draw_path_with_glow(surf, projected)
 
     def _draw_path_iso(self, surf: pygame.Surface, state: SimState, path: list[tuple[float, float]]) -> None:
-        if len(path) < 2:
-            return
         projected = [self._iso_point(x, y, 2.0, state.world.height) for x, y in path]
-        pygame.draw.lines(surf, PATH, False, projected, 3)
+        self._draw_path_with_glow(surf, projected)
 
     def _draw_path_chase(self, surf: pygame.Surface, state: SimState, path: list[tuple[float, float]]) -> None:
-        if len(path) < 2:
-            return
         projected = [self._chase_point(x, y, state) for x, y in path]
-        pygame.draw.lines(surf, PATH, False, projected, 3)
+        self._draw_path_with_glow(surf, projected)
+
+    def _draw_glow(self, surf: pygame.Surface, cx: float, cy: float, radius: int, color: Color, alpha: int = 40) -> None:
+        glow = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (*color, alpha), (radius, radius), radius)
+        surf.blit(glow, (int(cx) - radius, int(cy) - radius))
 
     def _draw_car(self, surf: pygame.Surface, state: SimState) -> None:
         x, y, yaw = state.vehicle.x, state.vehicle.y, state.vehicle.yaw
+        sx, sy = self._topdown_point(x, y)
+        self._draw_glow(surf, sx, sy, 20, CAR, 30)
         nose = self._topdown_point(x + math.cos(yaw) * 14, y + math.sin(yaw) * 14)
         left = self._topdown_point(x + math.cos(yaw + 2.4) * 10, y + math.sin(yaw + 2.4) * 10)
         right = self._topdown_point(x + math.cos(yaw - 2.4) * 10, y + math.sin(yaw - 2.4) * 10)
         pygame.draw.polygon(surf, CAR, [nose, left, right])
+        pygame.draw.polygon(surf, CAR_OUTLINE, [nose, left, right], 2)
 
     def _draw_car_iso(self, surf: pygame.Surface, state: SimState) -> None:
         x, y, yaw = state.vehicle.x, state.vehicle.y, state.vehicle.yaw
@@ -352,100 +425,216 @@ class Renderer2D(RenderBackend):
         nose = self._iso_point(nose_w[0], nose_w[1], 11.0, state.world.height)
         left = self._iso_point(left_w[0], left_w[1], 11.0, state.world.height)
         right = self._iso_point(right_w[0], right_w[1], 11.0, state.world.height)
+        cx = (nose[0] + left[0] + right[0]) / 3
+        cy = (nose[1] + left[1] + right[1]) / 3
+        self._draw_glow(surf, cx, cy, 18, CAR, 28)
         pygame.draw.polygon(surf, CAR, [nose, left, right])
+        pygame.draw.polygon(surf, CAR_OUTLINE, [nose, left, right], 2)
 
     def _draw_car_chase(self, surf: pygame.Surface) -> None:
         cx = self.width * 0.5
         cy = self.height * 0.84
+        self._draw_glow(surf, cx, cy, 22, CAR, 28)
         nose = (cx, cy - 16)
         left = (cx - 12, cy + 8)
         right = (cx + 12, cy + 8)
         pygame.draw.polygon(surf, CAR, [nose, left, right])
+        pygame.draw.polygon(surf, CAR_OUTLINE, [nose, left, right], 2)
 
     def _draw_map_car(self, surf: pygame.Surface, state: SimState) -> None:
         x, y = int(state.vehicle.x), int(state.vehicle.y)
-        pygame.draw.circle(surf, CAR, (x, y), 7)
+        self._draw_glow(surf, x, y, 14, CAR, 35)
+        pygame.draw.circle(surf, CAR, (x, y), 6)
+        pygame.draw.circle(surf, CAR_OUTLINE, (x, y), 6, 1)
         heading = (
             int(x + math.cos(state.vehicle.yaw) * 12),
             int(y + math.sin(state.vehicle.yaw) * 12),
         )
-        pygame.draw.line(surf, BG, (x, y), heading, 2)
+        pygame.draw.line(surf, CAR, (x, y), heading, 2)
 
     def _draw_goal(self, surf: pygame.Surface, state: SimState) -> None:
         gx, gy = state.world.goal
         sx, sy = self._topdown_point(gx, gy)
+        self._draw_glow(surf, sx, sy, 22, GOAL, 35)
         pygame.draw.circle(surf, GOAL, (int(sx), int(sy)), 11)
-        pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 5)
+        pygame.draw.circle(surf, GOAL_INNER, (int(sx), int(sy)), 6)
+        pygame.draw.circle(surf, (220, 255, 230), (int(sx), int(sy)), 2)
 
     def _draw_goal_iso(self, surf: pygame.Surface, state: SimState) -> None:
         gx, gy = state.world.goal
         sx, sy = self._iso_point(gx, gy, 6.0, state.world.height)
+        self._draw_glow(surf, sx, sy, 18, GOAL, 30)
         pygame.draw.circle(surf, GOAL, (int(sx), int(sy)), 9)
-        pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 4)
+        pygame.draw.circle(surf, GOAL_INNER, (int(sx), int(sy)), 5)
+        pygame.draw.circle(surf, (220, 255, 230), (int(sx), int(sy)), 2)
 
     def _draw_goal_chase(self, surf: pygame.Surface, state: SimState) -> None:
         gx, gy = state.world.goal
         sx, sy = self._chase_point(gx, gy, state)
+        self._draw_glow(surf, sx, sy, 18, GOAL, 30)
         pygame.draw.circle(surf, GOAL, (int(sx), int(sy)), 9)
-        pygame.draw.circle(surf, (10, 20, 14), (int(sx), int(sy)), 4)
+        pygame.draw.circle(surf, GOAL_INNER, (int(sx), int(sy)), 5)
+        pygame.draw.circle(surf, (220, 255, 230), (int(sx), int(sy)), 2)
+
+    def _draw_badge(self, surf: pygame.Surface, x: int, y: int, label: str, color: Color) -> int:
+        txt = self.badge_font.render(label.upper(), True, TEXT)
+        tw, th = txt.get_size()
+        pw, ph = tw + 14, th + 6
+        badge = pygame.Surface((pw, ph), pygame.SRCALPHA)
+        pygame.draw.rect(badge, (*color, 200), badge.get_rect(), border_radius=4)
+        badge.blit(txt, (7, 3))
+        surf.blit(badge, (x, y))
+        return pw + 6
+
+    def _draw_key_badge(self, surf: pygame.Surface, x: int, y: int, key: str) -> int:
+        txt = self.key_font.render(key, True, TEXT)
+        tw, th = txt.get_size()
+        pw, ph = tw + 10, th + 6
+        badge = pygame.Surface((pw, ph), pygame.SRCALPHA)
+        pygame.draw.rect(badge, (*KEY_BG, 220), badge.get_rect(), border_radius=3)
+        pygame.draw.rect(badge, (*KEY_BORDER, 180), badge.get_rect(), width=1, border_radius=3)
+        badge.blit(txt, (5, 3))
+        surf.blit(badge, (x, y))
+        return pw + 4
+
+    def _mode_badge_color(self, mode: str) -> Color:
+        if "autopilot" in mode:
+            return BADGE_AUTOPILOT
+        if "assistant" in mode or "policy" in mode.lower():
+            return BADGE_ASSISTANT
+        if "train" in mode:
+            return BADGE_TRAIN
+        return BADGE_MANUAL
 
     def _draw_hud(self, surf: pygame.Surface, mode: str, t: float, collided: bool) -> None:
-        panel = pygame.Surface((760, 72), pygame.SRCALPHA)
-        panel.fill((12, 14, 16, 170))
-        surf.blit(panel, (14, 14))
-        msg = f"mode={mode}   t={t:6.2f}s   {'COLLISION' if collided else 'RUNNING'}"
-        txt = self.font.render(msg, True, TEXT)
-        surf.blit(txt, (24, 38))
+        hud_h = 36
+        panel = pygame.Surface((self.width, hud_h), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (10, 12, 16, 200), panel.get_rect())
+        # Bottom edge highlight
+        pygame.draw.line(
+            panel, (*PANEL_EDGE, 120), (0, hud_h - 1), (self.width, hud_h - 1)
+        )
+        surf.blit(panel, (0, 0))
+
+        cx = 12
+        cy = 8
+
+        # Mode badge - extract primary mode word for badge
+        parts = mode.split("|")
+        primary = parts[0].strip()
+        badge_color = self._mode_badge_color(primary)
+        cx += self._draw_badge(surf, cx, cy, primary, badge_color)
+
+        # Extra info badges (map, expand, etc.)
+        for part in parts[1:]:
+            txt = self.hud_font.render(part.strip(), True, TEXT_DIM)
+            surf.blit(txt, (cx + 2, cy + 4))
+            cx += txt.get_width() + 12
+
+        # Right side: time + status
+        status_color = ACCENT_RED if collided else ACCENT_GREEN
+        status_text = "COLLISION" if collided else "OK"
+        time_txt = self.font_mono.render(f"{t:6.1f}s", True, TEXT_DIM)
+        status_txt = self.badge_font.render(status_text, True, TEXT)
+        st_w = status_txt.get_width() + 14
+        st_x = self.width - st_w - 12
+        # Status pill
+        pill = pygame.Surface((st_w, 20), pygame.SRCALPHA)
+        pygame.draw.rect(pill, (*status_color, 180), pill.get_rect(), border_radius=4)
+        pill.blit(status_txt, (7, 3))
+        surf.blit(pill, (st_x, cy))
+        # Time
+        surf.blit(time_txt, (st_x - time_txt.get_width() - 10, cy + 3))
 
     def _draw_controls(self, surf: pygame.Surface) -> None:
-        panel = pygame.Surface((360, 214), pygame.SRCALPHA)
-        panel.fill((9, 11, 14, 148))
-        x = self.width - 372
-        y = 54
-        surf.blit(panel, (x, y))
-        lines = [
-            "W/S throttle-brake  A/D steer",
-            "TAB switch mode     R reset",
-            "M switch map",
-            "V view chase/3d/top C clear replay",
-            "F camera tactical/follow/cinematic",
-            "E toggle auto-expand world",
-            "P save best live model",
-            "H toggle help       ESC quit",
+        entries = [
+            ("W", "S", "Throttle / Brake"),
+            ("A", "D", "Steer Left / Right"),
+            ("TAB", "", "Cycle Mode"),
+            ("R", "", "Reset Episode"),
+            ("M", "", "Switch Map"),
+            ("V", "", "Cycle View"),
+            ("F", "", "Cycle Camera"),
+            ("E", "", "Toggle Expand"),
+            ("P", "", "Save Live Model"),
+            ("C", "", "Clear Replay"),
+            ("H", "", "Toggle Help"),
+            ("ESC", "", "Quit"),
         ]
-        title = self.font.render("Controls", True, TEXT)
-        surf.blit(title, (x + 10, y + 10))
-        for i, line in enumerate(lines):
-            txt = self.font.render(line, True, MUTED)
-            surf.blit(txt, (x + 10, y + 36 + i * 24))
+        row_h = 22
+        pad = 14
+        title_h = 30
+        panel_h = title_h + len(entries) * row_h + pad
+        panel_w = 260
+
+        x = self.width - panel_w - 12
+        y = 46
+
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (12, 14, 18, 215), panel.get_rect(), border_radius=10)
+        pygame.draw.rect(panel, (*PANEL_EDGE, 140), panel.get_rect(), width=1, border_radius=10)
+        surf.blit(panel, (x, y))
+
+        title = self.title_font.render("Keyboard Shortcuts", True, TEXT)
+        surf.blit(title, (x + pad, y + 8))
+        pygame.draw.line(
+            surf, (*SEPARATOR, 160),
+            (x + pad, y + title_h - 2), (x + panel_w - pad, y + title_h - 2),
+        )
+
+        for i, (k1, k2, desc) in enumerate(entries):
+            ry = y + title_h + i * row_h + 2
+            kx = x + pad
+            kx += self._draw_key_badge(surf, kx, ry, k1)
+            if k2:
+                kx += self._draw_key_badge(surf, kx, ry, k2)
+            desc_txt = self.font.render(desc, True, MUTED)
+            surf.blit(desc_txt, (kx + 4, ry + 2))
 
     def _draw_slam_legend(self, surf: pygame.Surface, grid: np.ndarray) -> None:
-        panel = pygame.Surface((260, 120), pygame.SRCALPHA)
-        panel.fill((9, 11, 14, 178))
-        x = self.width - 272
-        y = self.height - 132
+        panel_w, panel_h = 220, 100
+        x = self.width - panel_w - 10
+        y = self.height - panel_h - 10
+
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (12, 14, 18, 210), panel.get_rect(), border_radius=8)
+        pygame.draw.rect(panel, (*PANEL_EDGE, 120), panel.get_rect(), width=1, border_radius=8)
         surf.blit(panel, (x, y))
-        title = self.font.render("Occupancy Legend", True, TEXT)
-        surf.blit(title, (x + 10, y + 10))
 
         explored = float(np.count_nonzero(grid > 0.08)) / float(grid.size)
-        stats = self.font.render(f"explored: {explored * 100.0:4.1f}%", True, MUTED)
-        surf.blit(stats, (x + 10, y + 34))
 
-        pygame.draw.rect(surf, GRID_FREE, pygame.Rect(x + 10, y + 62, 14, 14))
-        surf.blit(self.font.render("free evidence", True, MUTED), (x + 30, y + 60))
-        pygame.draw.rect(surf, GRID_OCC, pygame.Rect(x + 10, y + 86, 14, 14))
-        surf.blit(self.font.render("occupied evidence", True, MUTED), (x + 30, y + 84))
+        # Progress bar
+        bar_x, bar_y = x + 12, y + 12
+        bar_w, bar_h = panel_w - 24, 6
+        pygame.draw.rect(surf, (*KEY_BG, 255), pygame.Rect(bar_x, bar_y, bar_w, bar_h), border_radius=3)
+        fill_w = max(2, int(bar_w * explored))
+        pygame.draw.rect(surf, ACCENT_BLUE, pygame.Rect(bar_x, bar_y, fill_w, bar_h), border_radius=3)
+
+        pct_txt = self.hud_font.render(f"Explored  {explored * 100.0:.1f}%", True, TEXT_DIM)
+        surf.blit(pct_txt, (bar_x, bar_y + 12))
+
+        # Legend items
+        iy = bar_y + 32
+        pygame.draw.rect(surf, GRID_FREE, pygame.Rect(bar_x, iy + 2, 10, 10), border_radius=2)
+        surf.blit(self.hud_font.render("Free", True, MUTED), (bar_x + 16, iy))
+        pygame.draw.rect(surf, GRID_OCC, pygame.Rect(bar_x + 80, iy + 2, 10, 10), border_radius=2)
+        surf.blit(self.hud_font.render("Occupied", True, MUTED), (bar_x + 96, iy))
 
     def _draw_goal_map(self, surf: pygame.Surface, state: SimState) -> None:
         gx, gy = state.world.goal
-        pygame.draw.circle(surf, GOAL, (int(gx), int(gy)), 11)
-        pygame.draw.circle(surf, (10, 20, 14), (int(gx), int(gy)), 5)
+        self._draw_glow(surf, gx, gy, 18, GOAL, 30)
+        pygame.draw.circle(surf, GOAL, (int(gx), int(gy)), 10)
+        pygame.draw.circle(surf, GOAL_INNER, (int(gx), int(gy)), 5)
+        pygame.draw.circle(surf, (220, 255, 230), (int(gx), int(gy)), 2)
 
     def _draw_path_map(self, surf: pygame.Surface, path: list[tuple[float, float]]) -> None:
         if len(path) < 2:
             return
-        pygame.draw.lines(surf, PATH, False, path, 3)
+        # Draw path with subtle glow
+        glow_surf = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+        pygame.draw.lines(glow_surf, (*PATH, 40), False, path, 7)
+        surf.blit(glow_surf, (0, 0))
+        pygame.draw.lines(surf, PATH, False, path, 2)
 
     def _draw_slam_view(self, surf: pygame.Surface, state: SimState, grid: np.ndarray, resolution: float) -> None:
         surf.fill(MAP_BG)

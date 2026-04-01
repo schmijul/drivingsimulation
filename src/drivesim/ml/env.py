@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
@@ -13,6 +13,21 @@ from drivesim.autonomy.sensors import LidarSensor
 from drivesim.core.scenario import available_scenarios, build_world, generate_chunk_obstacles
 from drivesim.core.simulator import Simulator
 from drivesim.core.types import Action, DynamicObstacle, SimState
+
+try:
+    import gymnasium as _gym_mod
+except ImportError:  # pragma: no cover - optional dependency
+    try:
+        import gym as _gym_mod
+    except ImportError:  # pragma: no cover - optional dependency
+        _gym_mod = None
+
+if _gym_mod is not None:  # pragma: no branch - straightforward import guard
+    _GymEnvBase = _gym_mod.Env
+    _spaces = _gym_mod.spaces
+else:  # pragma: no cover - used when gym/gymnasium is not installed
+    _GymEnvBase = object
+    _spaces = None
 
 
 @dataclass
@@ -327,3 +342,136 @@ class DriveSimEnv:
             "mapping_mode": self.mapping_mode,
         }
         return obs, reward, done, info
+
+
+class DriveSimGymEnv(_GymEnvBase):
+    """Gym/Gymnasium-compatible wrapper around DriveSimEnv."""
+
+    metadata = {"render_modes": []}
+
+    def __init__(self, config: EnvConfig | None = None, observation_mode: str = "dict"):
+        if _gym_mod is None or _spaces is None:
+            raise ImportError(
+                "DriveSimGymEnv requires 'gymnasium' or 'gym'. "
+                "Install with: pip install -e .[rl]"
+            )
+        if observation_mode not in {"dict", "flat"}:
+            raise ValueError(f"unsupported observation_mode: {observation_mode!r}")
+
+        base_cfg = config or EnvConfig()
+        if base_cfg.auto_expand:
+            raise ValueError(
+                "DriveSimGymEnv requires a fixed observation space. "
+                "Set EnvConfig(auto_expand=False)."
+            )
+
+        self.base_env = DriveSimEnv(base_cfg)
+        self.observation_mode = observation_mode
+        self.action_space = _spaces.Box(
+            low=np.array([-1.0, -1.0], dtype=np.float32),
+            high=np.array([1.0, 1.0], dtype=np.float32),
+            dtype=np.float32,
+        )
+        self.observation_space = self._build_observation_space()
+
+    def _build_observation_space(self):
+        grid_shape = self.base_env.mapper.grid.shape
+        lidar_rays = self.base_env.lidar.rays
+
+        dict_space = _spaces.Dict(
+            {
+                "pose": _spaces.Box(
+                    low=np.array([0.0, 0.0, -math.pi, -200.0], dtype=np.float32),
+                    high=np.array(
+                        [self.base_env.world.width, self.base_env.world.height, math.pi, 200.0],
+                        dtype=np.float32,
+                    ),
+                    dtype=np.float32,
+                ),
+                "goal": _spaces.Box(
+                    low=np.array([0.0, 0.0], dtype=np.float32),
+                    high=np.array([self.base_env.world.width, self.base_env.world.height], dtype=np.float32),
+                    dtype=np.float32,
+                ),
+                "grid": _spaces.Box(low=0.0, high=1.0, shape=grid_shape, dtype=np.float32),
+                "lidar": _spaces.Box(
+                    low=0.0,
+                    high=float(self.base_env.lidar.max_range),
+                    shape=(lidar_rays,),
+                    dtype=np.float32,
+                ),
+                "collided": _spaces.Discrete(2),
+            }
+        )
+        if self.observation_mode == "dict":
+            return dict_space
+
+        flat_dim = int(4 + 2 + np.prod(grid_shape) + lidar_rays + 1)
+        return _spaces.Box(low=-np.inf, high=np.inf, shape=(flat_dim,), dtype=np.float32)
+
+    def _coerce_action(self, action: Any) -> Action:
+        if isinstance(action, Action):
+            throttle = float(action.throttle)
+            steering = float(action.steering)
+        elif isinstance(action, dict):
+            throttle = float(action.get("throttle", 0.0))
+            steering = float(action.get("steering", 0.0))
+        else:
+            arr = np.asarray(action, dtype=np.float32).reshape(-1)
+            if arr.size < 2:
+                raise ValueError("action must contain at least two values: [throttle, steering]")
+            throttle = float(arr[0])
+            steering = float(arr[1])
+        return Action(
+            throttle=float(np.clip(throttle, -1.0, 1.0)),
+            steering=float(np.clip(steering, -1.0, 1.0)),
+        )
+
+    def _format_observation(self, obs: Dict[str, Any]) -> Dict[str, Any] | np.ndarray:
+        dict_obs = {
+            "pose": np.asarray(obs["pose"], dtype=np.float32),
+            "goal": np.asarray(obs["goal"], dtype=np.float32),
+            "grid": np.asarray(obs["grid"], dtype=np.float32),
+            "lidar": np.asarray(obs["lidar"], dtype=np.float32),
+            "collided": int(bool(obs["collided"])),
+        }
+        if self.observation_mode == "dict":
+            return dict_obs
+
+        flat_obs = np.concatenate(
+            [
+                dict_obs["pose"],
+                dict_obs["goal"],
+                dict_obs["grid"].ravel(),
+                dict_obs["lidar"],
+                np.array([dict_obs["collided"]], dtype=np.float32),
+            ]
+        )
+        return flat_obs.astype(np.float32, copy=False)
+
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
+        if options and "map_name" in options:
+            self.base_env.set_map(str(options["map_name"]))
+
+        obs = self.base_env.reset(seed=seed)
+        if options and options.get("randomize_episode", False):
+            obs = self.base_env.randomize_episode()
+
+        info = {
+            "map_name": self.base_env.map_name,
+            "world_size": (self.base_env.world.width, self.base_env.world.height),
+            "mapping_mode": self.base_env.mapping_mode,
+        }
+        return self._format_observation(obs), info
+
+    def step(self, action: Any):
+        obs, reward, done, info = self.base_env.step(self._coerce_action(action))
+        terminated = bool(obs["collided"] or info["distance_to_goal"] < 18.0)
+        truncated = bool(done and not terminated)
+        return self._format_observation(obs), float(reward), terminated, truncated, info
+
+    def render(self):  # pragma: no cover - no renderer in wrapper
+        return None
+
+    def close(self) -> None:
+        return None
