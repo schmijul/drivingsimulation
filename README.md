@@ -2,11 +2,6 @@
 
 DriveSim is a stylized 2D driving and autonomy simulator with an ML-ready API.
 
-## Current UI Snapshots
-
-![DriveSim 2D split view](imgs/2dview.png)
-![DriveSim isometric split view](imgs/3dview.png)
-
 ## Quick Visual Tour
 
 ### Driving Cameras
