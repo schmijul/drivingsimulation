@@ -29,6 +29,8 @@ else:  # pragma: no cover - used when gym/gymnasium is not installed
     _GymEnvBase = object
     _spaces = None
 
+_VALID_MAPPING_MODES = {"ground_truth", "sensor_driven"}
+
 
 @dataclass
 class EnvConfig:
@@ -46,7 +48,8 @@ class EnvConfig:
 class DriveSimEnv:
     def __init__(self, config: EnvConfig | None = None):
         self.config = config or EnvConfig()
-        self.map_name = self.config.map_name
+        self.map_name = self.config.map_name if self.config.map_name in available_scenarios() else "default"
+        self.config.map_name = self.map_name
         self.mapping_mode = self.config.mapping_mode
         self.world = build_world(self.map_name)
         self.sim = Simulator(self.world)
@@ -71,8 +74,10 @@ class DriveSimEnv:
         return available_scenarios()
 
     def set_map(self, map_name: str) -> None:
-        self.map_name = map_name
-        self.world = build_world(map_name)
+        resolved_map_name = map_name if map_name in available_scenarios() else "default"
+        self.map_name = resolved_map_name
+        self.config.map_name = resolved_map_name
+        self.world = build_world(self.map_name)
         self.sim = Simulator(self.world)
         self.mapper = OccupancyGridMapper(self.world, mapping_mode=self.mapping_mode)
         self._steps = 0
@@ -80,6 +85,13 @@ class DriveSimEnv:
         self._generated_chunks = set()
         self._seed_existing_chunks()
         self._spawn_dynamic_obstacles()
+
+    def set_mapping_mode(self, mapping_mode: str) -> None:
+        if mapping_mode not in _VALID_MAPPING_MODES:
+            raise ValueError(f"unsupported mapping_mode: {mapping_mode!r}")
+        self.mapping_mode = mapping_mode
+        self.config.mapping_mode = mapping_mode
+        self.mapper = OccupancyGridMapper(self.world, mapping_mode=self.mapping_mode)
 
     def toggle_auto_expand(self) -> bool:
         self.auto_expand = not self.auto_expand
@@ -340,6 +352,9 @@ class DriveSimEnv:
             "auto_expand": self.auto_expand,
             "dynamic_obstacles": len(self.world.dynamic_obstacles),
             "mapping_mode": self.mapping_mode,
+            "map_name": self.map_name,
+            "collided": state.collided,
+            "goal_reached": dist_goal < 18.0,
         }
         return obs, reward, done, info
 
@@ -349,7 +364,14 @@ class DriveSimGymEnv(_GymEnvBase):
 
     metadata = {"render_modes": []}
 
-    def __init__(self, config: EnvConfig | None = None, observation_mode: str = "dict"):
+    def __init__(
+        self,
+        config: EnvConfig | None = None,
+        observation_mode: str = "dict",
+        map_names: list[str] | None = None,
+        randomize_on_reset: bool = False,
+        min_goal_distance: float = 160.0,
+    ):
         if _gym_mod is None or _spaces is None:
             raise ImportError(
                 "DriveSimGymEnv requires 'gymnasium' or 'gym'. "
@@ -365,8 +387,22 @@ class DriveSimGymEnv(_GymEnvBase):
                 "Set EnvConfig(auto_expand=False)."
             )
 
+        self._seed = int(base_cfg.seed)
+        self._rng = np.random.default_rng(self._seed)
+        self.allowed_map_names = tuple(dict.fromkeys(map_names or [base_cfg.map_name]))
+        if not self.allowed_map_names:
+            self.allowed_map_names = ("default",)
+        invalid = [map_name for map_name in self.allowed_map_names if map_name not in available_scenarios()]
+        if invalid:
+            raise ValueError(f"unsupported map_names: {invalid!r}")
+        self._episode_map_names = list(self.allowed_map_names)
+        self.randomize_on_reset = bool(randomize_on_reset)
+        self.min_goal_distance = float(min_goal_distance)
+        self.stage_name = ""
         self.base_env = DriveSimEnv(base_cfg)
         self.observation_mode = observation_mode
+        self._target_world_width, self._target_world_height = self._max_world_size()
+        self._target_grid_shape = self._grid_shape_for_world(self._target_world_width, self._target_world_height)
         self.action_space = _spaces.Box(
             low=np.array([-1.0, -1.0], dtype=np.float32),
             high=np.array([1.0, 1.0], dtype=np.float32),
@@ -374,8 +410,23 @@ class DriveSimGymEnv(_GymEnvBase):
         )
         self.observation_space = self._build_observation_space()
 
+    def _max_world_size(self) -> tuple[float, float]:
+        max_width = 0.0
+        max_height = 0.0
+        for map_name in self.allowed_map_names:
+            world = build_world(map_name)
+            max_width = max(max_width, world.width)
+            max_height = max(max_height, world.height)
+        return max_width, max_height
+
+    def _grid_shape_for_world(self, width: float, height: float) -> tuple[int, int]:
+        resolution = self.base_env.mapper.resolution
+        rows = int(height // resolution) + 1
+        cols = int(width // resolution) + 1
+        return rows, cols
+
     def _build_observation_space(self):
-        grid_shape = self.base_env.mapper.grid.shape
+        grid_shape = self._target_grid_shape
         lidar_rays = self.base_env.lidar.rays
 
         dict_space = _spaces.Dict(
@@ -383,14 +434,14 @@ class DriveSimGymEnv(_GymEnvBase):
                 "pose": _spaces.Box(
                     low=np.array([0.0, 0.0, -math.pi, -200.0], dtype=np.float32),
                     high=np.array(
-                        [self.base_env.world.width, self.base_env.world.height, math.pi, 200.0],
+                        [self._target_world_width, self._target_world_height, math.pi, 200.0],
                         dtype=np.float32,
                     ),
                     dtype=np.float32,
                 ),
                 "goal": _spaces.Box(
                     low=np.array([0.0, 0.0], dtype=np.float32),
-                    high=np.array([self.base_env.world.width, self.base_env.world.height], dtype=np.float32),
+                    high=np.array([self._target_world_width, self._target_world_height], dtype=np.float32),
                     dtype=np.float32,
                 ),
                 "grid": _spaces.Box(low=0.0, high=1.0, shape=grid_shape, dtype=np.float32),
@@ -427,11 +478,23 @@ class DriveSimGymEnv(_GymEnvBase):
             steering=float(np.clip(steering, -1.0, 1.0)),
         )
 
+    def _pad_grid(self, grid: np.ndarray) -> np.ndarray:
+        target_rows, target_cols = self._target_grid_shape
+        rows, cols = grid.shape
+        if rows > target_rows or cols > target_cols:
+            raise ValueError(
+                "observed grid shape exceeds configured observation_space: "
+                f"got {grid.shape}, expected <= {self._target_grid_shape}"
+            )
+        padded = np.zeros(self._target_grid_shape, dtype=np.float32)
+        padded[:rows, :cols] = grid
+        return padded
+
     def _format_observation(self, obs: Dict[str, Any]) -> Dict[str, Any] | np.ndarray:
         dict_obs = {
             "pose": np.asarray(obs["pose"], dtype=np.float32),
             "goal": np.asarray(obs["goal"], dtype=np.float32),
-            "grid": np.asarray(obs["grid"], dtype=np.float32),
+            "grid": self._pad_grid(np.asarray(obs["grid"], dtype=np.float32)),
             "lidar": np.asarray(obs["lidar"], dtype=np.float32),
             "collided": int(bool(obs["collided"])),
         }
@@ -449,25 +512,97 @@ class DriveSimGymEnv(_GymEnvBase):
         )
         return flat_obs.astype(np.float32, copy=False)
 
+    def set_episode_profile(
+        self,
+        *,
+        map_names: list[str] | None = None,
+        dynamic_obstacle_count: int | None = None,
+        mapping_mode: str | None = None,
+        min_goal_distance: float | None = None,
+        randomize_on_reset: bool | None = None,
+        stage_name: str | None = None,
+    ) -> None:
+        if map_names is not None:
+            unique_maps = list(dict.fromkeys(map_names))
+            invalid = [name for name in unique_maps if name not in self.allowed_map_names]
+            if invalid:
+                raise ValueError(f"maps are outside allowed observation_space set: {invalid!r}")
+            self._episode_map_names = unique_maps or list(self.allowed_map_names)
+        if dynamic_obstacle_count is not None:
+            value = int(dynamic_obstacle_count)
+            self.base_env.dynamic_obstacle_count = value
+            self.base_env.config.dynamic_obstacle_count = value
+        if mapping_mode is not None:
+            self.base_env.set_mapping_mode(mapping_mode)
+        if min_goal_distance is not None:
+            self.min_goal_distance = float(min_goal_distance)
+        if randomize_on_reset is not None:
+            self.randomize_on_reset = bool(randomize_on_reset)
+        if stage_name is not None:
+            self.stage_name = stage_name
+
+    def apply_curriculum_stage(self, stage: dict[str, Any]) -> None:
+        self.set_episode_profile(
+            map_names=[str(name) for name in list(stage.get("maps", []))],
+            dynamic_obstacle_count=int(stage.get("dynamic_obstacle_count", self.base_env.dynamic_obstacle_count)),
+            mapping_mode=str(stage.get("mapping_mode", self.base_env.mapping_mode)),
+            min_goal_distance=float(stage.get("min_goal_distance", self.min_goal_distance)),
+            randomize_on_reset=True,
+            stage_name=str(stage.get("name", "")),
+        )
+
+    def _choose_map_name(self, explicit_map_name: str | None = None) -> str:
+        if explicit_map_name:
+            if explicit_map_name not in self.allowed_map_names:
+                raise ValueError(f"map_name {explicit_map_name!r} is outside allowed map_names")
+            return explicit_map_name
+        if len(self._episode_map_names) == 1:
+            return self._episode_map_names[0]
+        idx = int(self._rng.integers(0, len(self._episode_map_names)))
+        return self._episode_map_names[idx]
+
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
-        if options and "map_name" in options:
-            self.base_env.set_map(str(options["map_name"]))
+        if seed is not None:
+            self._seed = int(seed)
+            self._rng = np.random.default_rng(self._seed)
+
+        options = options or {}
+        if "map_names" in options:
+            self.set_episode_profile(map_names=[str(name) for name in list(options["map_names"])])
+        if "dynamic_obstacle_count" in options:
+            self.set_episode_profile(dynamic_obstacle_count=int(options["dynamic_obstacle_count"]))
+        if "mapping_mode" in options:
+            self.set_episode_profile(mapping_mode=str(options["mapping_mode"]))
+        if "min_goal_distance" in options:
+            self.set_episode_profile(min_goal_distance=float(options["min_goal_distance"]))
+        if "randomize_episode" in options:
+            self.set_episode_profile(randomize_on_reset=bool(options["randomize_episode"]))
+        if "stage_name" in options:
+            self.stage_name = str(options["stage_name"])
+
+        map_name = self._choose_map_name(str(options["map_name"]) if "map_name" in options else None)
+        if map_name != self.base_env.map_name:
+            self.base_env.set_map(map_name)
 
         obs = self.base_env.reset(seed=seed)
-        if options and options.get("randomize_episode", False):
-            obs = self.base_env.randomize_episode()
+        if self.randomize_on_reset:
+            obs = self.base_env.randomize_episode(rng=self._rng, min_goal_distance=self.min_goal_distance)
 
         info = {
             "map_name": self.base_env.map_name,
             "world_size": (self.base_env.world.width, self.base_env.world.height),
             "mapping_mode": self.base_env.mapping_mode,
+            "dynamic_obstacles": len(self.base_env.world.dynamic_obstacles),
+            "curriculum_stage": self.stage_name,
         }
         return self._format_observation(obs), info
 
     def step(self, action: Any):
         obs, reward, done, info = self.base_env.step(self._coerce_action(action))
-        terminated = bool(obs["collided"] or info["distance_to_goal"] < 18.0)
+        terminated = bool(info["collided"] or info["goal_reached"])
         truncated = bool(done and not terminated)
+        info = dict(info)
+        info["curriculum_stage"] = self.stage_name
         return self._format_observation(obs), float(reward), terminated, truncated, info
 
     def render(self):  # pragma: no cover - no renderer in wrapper

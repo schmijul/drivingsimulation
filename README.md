@@ -31,7 +31,10 @@ Sensor-driven occupancy mode:
 - Lidar-style raycast sensing
 - Occupancy-grid mapping with selectable modes (`ground_truth` / `sensor_driven`)
 - Cost-aware A* path planning (with smoothing) and a lightweight path-following controller
-- Gym-like environment API (`reset`, `step`)
+- Gym/Gymnasium-compatible environment API for external RL frameworks
+- Stable-Baselines3 PPO training entrypoint with checkpointing
+- Curriculum presets (`easy`, `standard`, `robust`) for staged training and evaluation
+- Experiment tracking for RL training and headless eval runs
 - Stylized Pygame visualization for demo and debugging
 - Side-by-side driving view and live occupancy map view
 - Chase (default), 3D-style isometric, and top-down driving cameras
@@ -49,6 +52,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 drivesim-run
+```
+
+Install RL extras for Gym + SB3 workflows:
+
+```bash
+pip install -e .[dev,rl]
 ```
 
 Viewer controls:
@@ -87,7 +96,7 @@ DRIVESIM_MAPPING_MODE=sensor_driven drivesim-run
 ## Architecture
 - `drivesim.core`: world model, vehicle, simulation loop
 - `drivesim.autonomy`: sensing, mapping, planning, control
-- `drivesim.ml`: gym-like env, assistant agent, replay logger
+- `drivesim.ml`: gym env wrapper, RL trainer, curriculum presets, assistant agent, replay/logger tooling
 - `drivesim.ui`: renderer and interaction layer
 
 ## Model architectures
@@ -147,6 +156,32 @@ PYTHONPATH=src python3 -m drivesim.ml.train_auto --map maze --iterations 20 --po
 The trained model is saved to `models/assist_policy.npz` and is automatically used by `assistant` mode.
 The command prints live training progress with candidate-level updates and ETA.
 Use `--quiet` if you only want per-iteration summaries.
+
+## PPO training with SB3
+
+Train a PPO policy against the Gym-compatible environment:
+
+```bash
+make train-rl
+# equivalent:
+PYTHONPATH=src python3 -m drivesim.ml.train_rl
+```
+
+Example with a staged curriculum:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.train_rl \
+  --curriculum robust \
+  --maps default,maze,blocks \
+  --timesteps 8192 \
+  --eval-episodes 2
+```
+
+Each run writes a dedicated directory under `models/rl/` with:
+- `model.zip`
+- `checkpoints/`
+- `train_config.json`
+- `eval.json`
 
 ## One-command trainer for anyone (recommended)
 If you want a reliable default pipeline without hand-tuning, use the BC+DAgger trainer:
@@ -208,6 +243,7 @@ Run fixed-seed, headless evaluation and report benchmark metrics:
 - average distance to goal
 - average steps and episode reward
 - per-map breakdown (`default`, `maze`, etc.)
+- per-stage breakdown when using a curriculum
 
 Mapping mode defaults to `ground_truth` and can be switched with `--mapping-mode sensor_driven`.
 
@@ -225,6 +261,23 @@ Sensor-driven evaluation example:
 
 ```bash
 PYTHONPATH=src python3 -m drivesim.ml.eval --maps default,maze --episodes 4 --mapping-mode sensor_driven
+```
+
+Curriculum evaluation example:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.eval --policy autopilot --curriculum standard --episodes 2
+```
+
+Evaluate a trained PPO checkpoint:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.eval \
+  --policy rl \
+  --rl-algo ppo \
+  --model models/rl/<run>/model.zip \
+  --curriculum robust \
+  --episodes 2
 ```
 
 Compare assistant vs autopilot in one run:
@@ -271,6 +324,23 @@ For compare reports (`policy=both`), history rows include delta columns:
 - `dc`: collision-rate delta (assistant - autopilot)
 - `dr`: reward delta (assistant - autopilot)
 
+## Experiment history
+
+RL training and CLI eval runs are tracked in:
+- `replays/experiments/index.jsonl`
+
+Show the latest runs:
+
+```bash
+make experiment-history
+```
+
+Query the best PPO run on the robust curriculum:
+
+```bash
+PYTHONPATH=src python3 -m drivesim.ml.experiment_history --kind train_rl --algo ppo --curriculum robust --best
+```
+
 ## Next steps
 - Add a 3D renderer backend (for example Panda3D or a Unity bridge)
 - Train an assistant policy from replay data
@@ -278,6 +348,7 @@ For compare reports (`policy=both`), history rows include delta columns:
 
 ## Make targets
 - `make install-dev`: install editable package with dev dependencies
+- `make install-rl`: install editable package with RL dependencies (`gymnasium`, `stable-baselines3`)
 - `make run`: start the simulator UI
 - `make test`: run test suite
 - `make test-workflows`: run workflow-focused tests (train/model/eval coverage)
@@ -290,9 +361,11 @@ For compare reports (`policy=both`), history rows include delta columns:
 - `make train MODE=replay`: train from replay log
 - `make train-anyone`: run one-command BC+DAgger trainer
 - `make train-auto`: run headless self-training over many episodes
+- `make train-rl`: run PPO training with the Gym/SB3 pipeline
 - `make demo-3d`: start UI directly in 3D camera mode
 - `make eval`: run headless evaluation with fixed-seed metrics
 - `make eval-compare`: compare assistant vs autopilot in one headless run
 - `make eval-report`: compare policies and auto-save timestamped JSON to `replays/evals/`
 - `make eval-history`: show recent eval history rows from `replays/evals/index.jsonl`
 - `make eval-best`: show the best recorded eval row by success rate
+- `make experiment-history`: show tracked training/eval runs from `replays/experiments/index.jsonl`

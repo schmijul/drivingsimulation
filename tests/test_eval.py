@@ -10,6 +10,7 @@ from drivesim.ml.eval import (
     run_eval,
     run_eval_compare,
 )
+from drivesim.ml.experiment import load_experiment_history
 from drivesim.ml.models import TinyMLPPolicyModel
 
 
@@ -143,3 +144,41 @@ def test_append_eval_history_writes_jsonl(tmp_path) -> None:
     row = json.loads(lines[0])
     assert row["policy_mode"] == "assistant"
     assert row["summary"]["success_rate"] == 0.5
+
+
+def test_eval_curriculum_adds_stage_summaries() -> None:
+    summary = run_eval(
+        EvalConfig(
+            maps=["default", "blocks"],
+            episodes_per_map=1,
+            max_steps=80,
+            seed=13,
+            policy_mode="autopilot",
+            dynamic_obstacle_count=0,
+            curriculum="easy",
+        )
+    )
+    assert summary["curriculum"] == "easy"
+    assert "per_stage" in summary
+    assert "easy-start" in summary["per_stage"]
+
+
+def test_eval_can_track_experiment_history(tmp_path) -> None:
+    history_path = tmp_path / "experiments.jsonl"
+    summary = run_eval(
+        EvalConfig(
+            maps=["default"],
+            episodes_per_map=1,
+            max_steps=80,
+            seed=31,
+            policy_mode="autopilot",
+            dynamic_obstacle_count=0,
+            track_run=True,
+            experiment_history_path=str(history_path),
+        )
+    )
+    rows = load_experiment_history(str(history_path))
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "eval"
+    assert rows[0]["policy_mode"] == "autopilot"
+    assert rows[0]["summary"]["success_rate"] == summary["success_rate"]

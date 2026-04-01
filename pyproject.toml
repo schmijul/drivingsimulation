@@ -18,17 +18,20 @@ dev = [
   "pytest>=8.0"
 ]
 rl = [
-  "gymnasium>=0.29"
+  "gymnasium>=0.29",
+  "stable-baselines3>=2.3,<3"
 ]
 
 [project.scripts]
 drivesim-run = "drivesim.main:main"
 drivesim-demo = "drivesim.main:main"
 drivesim-train = "drivesim.ml.train:main"
+drivesim-train-rl = "drivesim.ml.train_rl:main"
 drivesim-train-anyone = "drivesim.ml.train_anyone:main"
 drivesim-train-auto = "drivesim.ml.train_auto:main"
 drivesim-eval = "drivesim.ml.eval:main"
 drivesim-eval-history = "drivesim.ml.eval_history:main"
+drivesim-experiment-history = "drivesim.ml.experiment_history:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

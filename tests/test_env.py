@@ -172,3 +172,43 @@ def test_gym_wrapper_can_flatten_observation() -> None:
 
     assert isinstance(obs, np.ndarray)
     assert obs.shape == env.observation_space.shape
+
+
+def test_gym_wrapper_keeps_fixed_observation_shape_across_maps() -> None:
+    _require_gym_backend()
+    env = DriveSimGymEnv(
+        EnvConfig(dynamic_obstacle_count=0),
+        observation_mode="flat",
+        map_names=["default", "generated_medium"],
+    )
+
+    obs_default, _ = env.reset(seed=7, options={"map_name": "default"})
+    obs_generated, _ = env.reset(seed=7, options={"map_name": "generated_medium"})
+
+    assert isinstance(obs_default, np.ndarray)
+    assert isinstance(obs_generated, np.ndarray)
+    assert obs_default.shape == obs_generated.shape == env.observation_space.shape
+
+
+def test_gym_wrapper_applies_curriculum_stage_metadata() -> None:
+    _require_gym_backend()
+    env = DriveSimGymEnv(
+        EnvConfig(dynamic_obstacle_count=0),
+        observation_mode="flat",
+        map_names=["default", "maze"],
+    )
+    env.apply_curriculum_stage(
+        {
+            "name": "stage-a",
+            "maps": ["maze"],
+            "dynamic_obstacle_count": 1,
+            "mapping_mode": "sensor_driven",
+            "min_goal_distance": 180.0,
+        }
+    )
+
+    _, info = env.reset(seed=8)
+
+    assert info["map_name"] == "maze"
+    assert info["mapping_mode"] == "sensor_driven"
+    assert info["curriculum_stage"] == "stage-a"

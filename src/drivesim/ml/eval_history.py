@@ -82,6 +82,7 @@ def main() -> None:
     parser.add_argument("--policy", default="", help="Optional filter (assistant/autopilot/both)")
     parser.add_argument("--min-success", type=float, default=-1.0, help="Filter by minimum success rate in [0,1]")
     parser.add_argument("--map", default="", help="Filter rows containing this map in the run config")
+    parser.add_argument("--curriculum", default="", help="Optional curriculum filter")
     parser.add_argument("--best", action="store_true", help="Show only the single best row by success rate")
     args = parser.parse_args()
 
@@ -92,6 +93,8 @@ def main() -> None:
         rows = [r for r in rows if float(_summary_block(r).get("success_rate", 0.0)) >= args.min_success]
     if args.map:
         rows = [r for r in rows if args.map in list(r.get("maps", []))]
+    if args.curriculum:
+        rows = [r for r in rows if str(r.get("curriculum", "")) == args.curriculum]
     rows = sort_history(rows, args.sort)
     if args.best:
         rows = sort_history(rows, "success")[:1]

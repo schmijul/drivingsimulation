@@ -5,11 +5,19 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
 from drivesim.ml.agent import AssistAgent
-from drivesim.ml.env import DriveSimEnv, EnvConfig
+from drivesim.ml.curriculum import resolve_curriculum, single_stage_curriculum
+from drivesim.ml.env import DriveSimEnv, DriveSimGymEnv, EnvConfig
+from drivesim.ml.experiment import (
+    append_experiment_record,
+    build_experiment_record,
+    default_experiment_history_path,
+)
+from drivesim.ml.rl_utils import load_rl_model
 
 
 @dataclass
@@ -22,7 +30,12 @@ class EvalConfig:
     model_path: str = "models/assist_policy.npz"
     dynamic_obstacle_count: int = 2
     mapping_mode: str = "ground_truth"
+    min_goal_distance: float = 160.0
+    curriculum: str = ""
+    rl_algorithm: str = "ppo"
     json_out: str = ""
+    track_run: bool = False
+    experiment_history_path: str = default_experiment_history_path()
 
 
 def default_eval_report_path(policy_mode: str, seed: int, now: datetime | None = None) -> str:
@@ -46,19 +59,87 @@ def _append_eval_history(
         "seed": cfg.seed,
         "maps": cfg.maps,
         "episodes_per_map": cfg.episodes_per_map,
+        "curriculum": cfg.curriculum,
         "summary": summary,
     }
     with history_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(event) + "\n")
 
 
-def _episode_metrics(env: DriveSimEnv, policy_mode: str, agent: AssistAgent, episode_seed: int) -> dict[str, float | bool | int]:
+def _write_eval_json(path: str, cfg: EvalConfig, summary: dict[str, object]) -> None:
+    out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(
+            {
+                "config": {
+                    "maps": cfg.maps,
+                    "episodes_per_map": cfg.episodes_per_map,
+                    "max_steps": cfg.max_steps,
+                    "seed": cfg.seed,
+                    "policy_mode": cfg.policy_mode,
+                    "model_path": cfg.model_path,
+                    "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
+                    "mapping_mode": cfg.mapping_mode,
+                    "min_goal_distance": cfg.min_goal_distance,
+                    "curriculum": cfg.curriculum,
+                    "rl_algorithm": cfg.rl_algorithm,
+                },
+                "summary": summary,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _maybe_track_eval_run(cfg: EvalConfig, summary: dict[str, object], kind: str) -> None:
+    if not cfg.track_run:
+        return
+
+    config_payload = {
+        "maps": cfg.maps,
+        "episodes_per_map": cfg.episodes_per_map,
+        "max_steps": cfg.max_steps,
+        "seed": cfg.seed,
+        "policy_mode": cfg.policy_mode,
+        "model_path": cfg.model_path,
+        "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
+        "mapping_mode": cfg.mapping_mode,
+        "min_goal_distance": cfg.min_goal_distance,
+        "curriculum": cfg.curriculum,
+        "rl_algorithm": cfg.rl_algorithm,
+    }
+    row = build_experiment_record(
+        kind=kind,
+        name=f"{cfg.policy_mode}:{cfg.curriculum or 'custom'}",
+        algo=cfg.rl_algorithm if cfg.policy_mode == "rl" else cfg.policy_mode,
+        policy_mode=cfg.policy_mode,
+        model_path=cfg.model_path,
+        seed=cfg.seed,
+        maps=cfg.maps,
+        curriculum=cfg.curriculum or "custom",
+        summary=summary,
+        config=config_payload,
+        report_path=cfg.json_out,
+    )
+    append_experiment_record(cfg.experiment_history_path, row)
+
+
+def _episode_metrics(
+    env: DriveSimEnv,
+    policy_mode: str,
+    agent: AssistAgent,
+    episode_seed: int,
+    min_goal_distance: float,
+) -> dict[str, float | bool | int | str]:
     env.reset(seed=episode_seed)
-    obs = env.randomize_episode()
+    obs = env.randomize_episode(min_goal_distance=min_goal_distance)
     done = False
     total_reward = 0.0
     steps = 0
-    info = {"distance_to_goal": float("inf")}
+    info = {"distance_to_goal": float("inf"), "goal_reached": False, "map_name": env.map_name}
     collided = False
 
     while not done:
@@ -72,23 +153,55 @@ def _episode_metrics(env: DriveSimEnv, policy_mode: str, agent: AssistAgent, epi
         collided = bool(obs["collided"])
 
     distance = float(info["distance_to_goal"])
-    success = distance < 18.0 and not collided
+    success = bool(info["goal_reached"]) and not collided
     return {
         "success": success,
         "collided": collided,
         "distance": distance,
         "steps": steps,
         "total_reward": total_reward,
+        "map_name": str(info["map_name"]),
     }
 
 
-def _summarize(rows: list[dict[str, float | bool | int]]) -> dict[str, float]:
+def _episode_metrics_rl(
+    env: DriveSimGymEnv,
+    model: Any,
+    episode_seed: int,
+) -> dict[str, float | bool | int | str]:
+    obs, reset_info = env.reset(seed=episode_seed)
+    terminated = False
+    truncated = False
+    total_reward = 0.0
+    steps = 0
+    info: dict[str, Any] = {"distance_to_goal": float("inf"), "goal_reached": False, "map_name": reset_info["map_name"]}
+
+    while not (terminated or truncated):
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, terminated, truncated, info = env.step(action)
+        total_reward += float(reward)
+        steps += 1
+
+    distance = float(info["distance_to_goal"])
+    collided = bool(info["collided"])
+    success = bool(info["goal_reached"]) and not collided
+    return {
+        "success": success,
+        "collided": collided,
+        "distance": distance,
+        "steps": steps,
+        "total_reward": total_reward,
+        "map_name": str(info["map_name"]),
+    }
+
+
+def _summarize(rows: list[dict[str, float | bool | int | str]]) -> dict[str, float]:
     total = max(1, len(rows))
-    success_rate = sum(1 for r in rows if bool(r["success"])) / total
-    collision_rate = sum(1 for r in rows if bool(r["collided"])) / total
-    avg_distance = float(np.mean([float(r["distance"]) for r in rows])) if rows else float("nan")
-    avg_steps = float(np.mean([float(r["steps"]) for r in rows])) if rows else float("nan")
-    avg_reward = float(np.mean([float(r["total_reward"]) for r in rows])) if rows else float("nan")
+    success_rate = sum(1 for row in rows if bool(row["success"])) / total
+    collision_rate = sum(1 for row in rows if bool(row["collided"])) / total
+    avg_distance = float(np.mean([float(row["distance"]) for row in rows])) if rows else float("nan")
+    avg_steps = float(np.mean([float(row["steps"]) for row in rows])) if rows else float("nan")
+    avg_reward = float(np.mean([float(row["total_reward"]) for row in rows])) if rows else float("nan")
     return {
         "episodes": float(total),
         "success_rate": success_rate,
@@ -101,56 +214,103 @@ def _summarize(rows: list[dict[str, float | bool | int]]) -> dict[str, float]:
 
 def run_eval(cfg: EvalConfig) -> dict[str, object]:
     rng = np.random.default_rng(cfg.seed)
-    agent = AssistAgent(cfg.model_path)
-    all_rows: list[dict[str, float | bool | int]] = []
-    rows_by_map: dict[str, list[dict[str, float | bool | int]]] = {}
+    curriculum = (
+        resolve_curriculum(cfg.curriculum, maps_override=cfg.maps)
+        if cfg.curriculum
+        else single_stage_curriculum(
+            maps=cfg.maps,
+            dynamic_obstacle_count=cfg.dynamic_obstacle_count,
+            mapping_mode=cfg.mapping_mode,
+            min_goal_distance=cfg.min_goal_distance,
+        )
+    )
 
-    for map_name in cfg.maps:
-        env = DriveSimEnv(
+    all_rows: list[dict[str, float | bool | int | str]] = []
+    rows_by_map: dict[str, list[dict[str, float | bool | int | str]]] = {}
+    rows_by_stage: dict[str, list[dict[str, float | bool | int | str]]] = {}
+
+    if cfg.policy_mode == "rl":
+        model = load_rl_model(cfg.model_path, cfg.rl_algorithm)
+        allowed_maps = sorted({map_name for stage in curriculum.stages for map_name in stage.maps})
+        env = DriveSimGymEnv(
             EnvConfig(
-                map_name=map_name,
+                map_name=allowed_maps[0],
                 max_steps=cfg.max_steps,
                 auto_expand=False,
                 dynamic_obstacle_count=cfg.dynamic_obstacle_count,
                 seed=cfg.seed,
                 mapping_mode=cfg.mapping_mode,
-            )
+            ),
+            observation_mode="flat",
+            map_names=allowed_maps,
+            randomize_on_reset=True,
+            min_goal_distance=cfg.min_goal_distance,
         )
-        for _ in range(cfg.episodes_per_map):
-            episode_seed = int(rng.integers(0, 2**31 - 1))
-            row = _episode_metrics(env, cfg.policy_mode, agent, episode_seed)
-            all_rows.append(row)
-            rows_by_map.setdefault(map_name, []).append(row)
+        for stage in curriculum.stages:
+            for map_name in stage.maps:
+                env.set_episode_profile(
+                    map_names=[map_name],
+                    dynamic_obstacle_count=stage.dynamic_obstacle_count,
+                    mapping_mode=stage.mapping_mode,
+                    min_goal_distance=stage.min_goal_distance,
+                    randomize_on_reset=True,
+                    stage_name=stage.name,
+                )
+                for _ in range(cfg.episodes_per_map):
+                    episode_seed = int(rng.integers(0, 2**31 - 1))
+                    row = _episode_metrics_rl(env, model, episode_seed)
+                    all_rows.append(row)
+                    rows_by_map.setdefault(map_name, []).append(row)
+                    rows_by_stage.setdefault(stage.name, []).append(row)
+    else:
+        agent = AssistAgent(cfg.model_path)
+        for stage in curriculum.stages:
+            env = DriveSimEnv(
+                EnvConfig(
+                    map_name=stage.maps[0],
+                    max_steps=cfg.max_steps,
+                    auto_expand=False,
+                    dynamic_obstacle_count=stage.dynamic_obstacle_count,
+                    seed=cfg.seed,
+                    mapping_mode=stage.mapping_mode,
+                )
+            )
+            env.set_mapping_mode(stage.mapping_mode)
+            env.dynamic_obstacle_count = stage.dynamic_obstacle_count
+            env.config.dynamic_obstacle_count = stage.dynamic_obstacle_count
+            for map_name in stage.maps:
+                env.set_map(map_name)
+                env.set_mapping_mode(stage.mapping_mode)
+                env.dynamic_obstacle_count = stage.dynamic_obstacle_count
+                env.config.dynamic_obstacle_count = stage.dynamic_obstacle_count
+                for _ in range(cfg.episodes_per_map):
+                    episode_seed = int(rng.integers(0, 2**31 - 1))
+                    row = _episode_metrics(
+                        env,
+                        cfg.policy_mode,
+                        agent,
+                        episode_seed,
+                        min_goal_distance=stage.min_goal_distance,
+                    )
+                    all_rows.append(row)
+                    rows_by_map.setdefault(map_name, []).append(row)
+                    rows_by_stage.setdefault(stage.name, []).append(row)
 
     overall = _summarize(all_rows)
     per_map = {map_name: _summarize(rows) for map_name, rows in rows_by_map.items()}
-    result: dict[str, object] = {**overall, "per_map": per_map}
+    per_stage = {stage_name: _summarize(rows) for stage_name, rows in rows_by_stage.items()}
+    result: dict[str, object] = {
+        **overall,
+        "curriculum": curriculum.name,
+        "per_map": per_map,
+        "per_stage": per_stage,
+    }
 
     if cfg.json_out:
-        out_path = Path(cfg.json_out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps(
-                {
-                    "config": {
-                        "maps": cfg.maps,
-                        "episodes_per_map": cfg.episodes_per_map,
-                        "max_steps": cfg.max_steps,
-                        "seed": cfg.seed,
-                        "policy_mode": cfg.policy_mode,
-                        "model_path": cfg.model_path,
-                        "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
-                        "mapping_mode": cfg.mapping_mode,
-                    },
-                    "summary": result,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        _append_eval_history(Path("replays/evals/index.jsonl"), str(out_path), cfg, result)
+        _write_eval_json(cfg.json_out, cfg, result)
+        _append_eval_history(Path("replays/evals/index.jsonl"), cfg.json_out, cfg, result)
 
+    _maybe_track_eval_run(cfg, result, kind="eval")
     return result
 
 
@@ -164,7 +324,12 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
         model_path=cfg.model_path,
         dynamic_obstacle_count=cfg.dynamic_obstacle_count,
         mapping_mode=cfg.mapping_mode,
+        min_goal_distance=cfg.min_goal_distance,
+        curriculum=cfg.curriculum,
+        rl_algorithm=cfg.rl_algorithm,
         json_out="",
+        track_run=False,
+        experiment_history_path=cfg.experiment_history_path,
     )
     autopilot_cfg = EvalConfig(
         maps=cfg.maps,
@@ -175,7 +340,12 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
         model_path=cfg.model_path,
         dynamic_obstacle_count=cfg.dynamic_obstacle_count,
         mapping_mode=cfg.mapping_mode,
+        min_goal_distance=cfg.min_goal_distance,
+        curriculum=cfg.curriculum,
+        rl_algorithm=cfg.rl_algorithm,
         json_out="",
+        track_run=False,
+        experiment_history_path=cfg.experiment_history_path,
     )
     assistant = run_eval(assistant_cfg)
     autopilot = run_eval(autopilot_cfg)
@@ -187,33 +357,13 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
         "avg_total_reward": float(assistant["avg_total_reward"]) - float(autopilot["avg_total_reward"]),
     }
     result: dict[str, object] = {
+        "curriculum": assistant["curriculum"],
         "assistant": assistant,
         "autopilot": autopilot,
         "delta_assistant_minus_autopilot": delta,
     }
     if cfg.json_out:
-        out_path = Path(cfg.json_out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps(
-                {
-                    "config": {
-                        "maps": cfg.maps,
-                        "episodes_per_map": cfg.episodes_per_map,
-                        "max_steps": cfg.max_steps,
-                        "seed": cfg.seed,
-                        "policy_mode": "both",
-                        "model_path": cfg.model_path,
-                        "dynamic_obstacle_count": cfg.dynamic_obstacle_count,
-                        "mapping_mode": cfg.mapping_mode,
-                    },
-                    "summary": result,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+        _write_eval_json(cfg.json_out, cfg, result)
         history_cfg = EvalConfig(
             maps=cfg.maps,
             episodes_per_map=cfg.episodes_per_map,
@@ -223,9 +373,16 @@ def run_eval_compare(cfg: EvalConfig) -> dict[str, object]:
             model_path=cfg.model_path,
             dynamic_obstacle_count=cfg.dynamic_obstacle_count,
             mapping_mode=cfg.mapping_mode,
+            min_goal_distance=cfg.min_goal_distance,
+            curriculum=cfg.curriculum,
+            rl_algorithm=cfg.rl_algorithm,
             json_out=cfg.json_out,
+            track_run=False,
+            experiment_history_path=cfg.experiment_history_path,
         )
-        _append_eval_history(Path("replays/evals/index.jsonl"), str(out_path), history_cfg, result)
+        _append_eval_history(Path("replays/evals/index.jsonl"), cfg.json_out, history_cfg, result)
+
+    _maybe_track_eval_run(cfg, result, kind="eval_compare")
     return result
 
 
@@ -237,11 +394,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=11, help="Evaluation seed")
     parser.add_argument(
         "--policy",
-        choices=["assistant", "autopilot", "both"],
+        choices=["assistant", "autopilot", "rl", "both"],
         default="assistant",
         help="Policy to evaluate",
     )
-    parser.add_argument("--model", default="models/assist_policy.npz", help="Assistant model path")
+    parser.add_argument("--model", default="models/assist_policy.npz", help="Policy model path")
     parser.add_argument("--dynamic-obstacles", type=int, default=2, help="Dynamic obstacles per episode")
     parser.add_argument(
         "--mapping-mode",
@@ -249,11 +406,29 @@ def main() -> None:
         default="ground_truth",
         help="Occupancy mapping mode",
     )
+    parser.add_argument("--min-goal-distance", type=float, default=160.0, help="Minimum reset goal distance")
+    parser.add_argument(
+        "--curriculum",
+        choices=["", "easy", "standard", "robust"],
+        default="",
+        help="Optional curriculum preset for staged evaluation",
+    )
+    parser.add_argument(
+        "--rl-algo",
+        choices=["ppo"],
+        default="ppo",
+        help="RL algorithm loader to use when --policy rl",
+    )
     parser.add_argument("--json-out", default="", help="Optional path to write evaluation summary JSON")
     parser.add_argument(
         "--json-auto",
         action="store_true",
         help="Auto-write JSON report to replays/evals with a timestamped filename",
+    )
+    parser.add_argument(
+        "--no-track-run",
+        action="store_true",
+        help="Disable experiment history tracking for this CLI invocation",
     )
     args = parser.parse_args()
 
@@ -261,7 +436,7 @@ def main() -> None:
     if args.json_auto and not json_out:
         json_out = default_eval_report_path(args.policy, args.seed)
 
-    maps = [m.strip() for m in args.maps.split(",") if m.strip()]
+    maps = [map_name.strip() for map_name in args.maps.split(",") if map_name.strip()]
     cfg = EvalConfig(
         maps=maps,
         episodes_per_map=args.episodes,
@@ -271,7 +446,11 @@ def main() -> None:
         model_path=args.model,
         dynamic_obstacle_count=args.dynamic_obstacles,
         mapping_mode=args.mapping_mode,
+        min_goal_distance=args.min_goal_distance,
+        curriculum=args.curriculum,
+        rl_algorithm=args.rl_algo,
         json_out=json_out,
+        track_run=not args.no_track_run,
     )
     if cfg.policy_mode == "both":
         summary = run_eval_compare(cfg)
