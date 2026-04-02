@@ -134,6 +134,20 @@ def train_rl(cfg: RLTrainConfig) -> dict[str, object]:
         )
     )
     allowed_maps = sorted({map_name for stage in curriculum.stages for map_name in stage.maps})
+    probe_env = DriveSimGymEnv(
+        EnvConfig(
+            map_name=allowed_maps[0],
+            max_steps=cfg.max_steps,
+            auto_expand=False,
+            dynamic_obstacle_count=curriculum.stages[0].dynamic_obstacle_count,
+            seed=cfg.seed,
+            mapping_mode=curriculum.stages[0].mapping_mode,
+        ),
+        observation_mode=cfg.observation_mode,
+        map_names=allowed_maps,
+        randomize_on_reset=True,
+        min_goal_distance=curriculum.stages[0].min_goal_distance,
+    )
     run_name = cfg.run_name or default_rl_run_name(cfg)
     run_dir = Path(cfg.output_dir) / run_name
     checkpoint_dir = run_dir / "checkpoints"
@@ -145,9 +159,13 @@ def train_rl(cfg: RLTrainConfig) -> dict[str, object]:
         "curriculum": curriculum.name,
         "policy_hidden_sizes": list(cfg.policy_hidden_sizes),
         "allowed_maps": allowed_maps,
+        "target_grid_shape": list(probe_env._target_grid_shape),
+        "target_world_size": [probe_env._target_world_width, probe_env._target_world_height],
+        "lidar_rays": probe_env.base_env.lidar.rays,
         "stages": [stage.to_dict() for stage in curriculum.stages],
     }
     (run_dir / "train_config.json").write_text(json.dumps(config_payload, indent=2) + "\n", encoding="utf-8")
+    probe_env.close()
 
     env = VecMonitor(
         DummyVecEnv(

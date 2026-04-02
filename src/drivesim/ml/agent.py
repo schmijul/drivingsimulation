@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +24,15 @@ class AssistAgent:
         if Path(model_path).exists():
             self.policy = load_policy_model(model_path)
             self.model_name = self.policy.model_name
+
+    @staticmethod
+    def default_model_path() -> str:
+        return os.getenv("DRIVESIM_ASSIST_MODEL", "models/assist_policy.npz")
+
+    def writable_model_path(self) -> str:
+        if Path(self.model_path).suffix == ".npz":
+            return self.model_path
+        return "models/assist_policy.npz"
 
     @staticmethod
     def _goal_seek_action(observation: dict) -> Action:
@@ -76,7 +86,10 @@ class AssistAgent:
 
     def act(self, observation: dict) -> Action:
         if self.policy is not None:
-            learned = self.policy.act(observation)
+            try:
+                learned = self.policy.act(observation)
+            except ValueError:
+                return self._safety_override(observation, self._goal_seek_action(observation))
             prior = self._goal_seek_action(observation)
             front = float(min(observation.get("lidar_front", [99.0])))
             steer_disagreement = abs(learned.steering - prior.steering)

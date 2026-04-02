@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Protocol
 
 import numpy as np
 
+from drivesim.core.scenario import build_world
 from drivesim.core.types import Action
 from drivesim.ml.policy import LinearPolicy, features_for_dim
+from drivesim.ml.rl_utils import load_rl_model
 
 
 class PolicyModel(Protocol):
@@ -72,11 +75,85 @@ class TinyMLPPolicyModel:
         )
 
 
+@dataclass
+class PPOPolicyModel:
+    model: object
+    allowed_maps: tuple[str, ...]
+    grid_shape: tuple[int, int]
+    model_name: str = "ppo"
+
+    def _flat_observation(self, observation: dict) -> np.ndarray:
+        map_name = str(observation.get("map_name", ""))
+        if map_name and self.allowed_maps and map_name not in self.allowed_maps:
+            raise ValueError(f"map {map_name!r} is outside PPO training maps {self.allowed_maps!r}")
+
+        pose = np.asarray(observation["pose"], dtype=np.float32)
+        goal = np.asarray(observation["goal"], dtype=np.float32)
+        grid = np.asarray(observation["grid"], dtype=np.float32)
+        lidar = np.asarray(observation["lidar"], dtype=np.float32)
+
+        target_rows, target_cols = self.grid_shape
+        rows, cols = grid.shape
+        if rows > target_rows or cols > target_cols:
+            raise ValueError(
+                f"observation grid {grid.shape} exceeds PPO input grid shape {self.grid_shape}; "
+                "use a checkpoint trained on this map family"
+            )
+
+        padded_grid = np.zeros(self.grid_shape, dtype=np.float32)
+        padded_grid[:rows, :cols] = grid
+        collided = np.array([float(bool(observation.get("collided", False)))], dtype=np.float32)
+        return np.concatenate([pose, goal, padded_grid.ravel(), lidar, collided]).astype(np.float32, copy=False)
+
+    def act(self, observation: dict) -> Action:
+        flat_obs = self._flat_observation(observation)
+        action, _ = self.model.predict(flat_obs, deterministic=True)  # type: ignore[attr-defined]
+        arr = np.asarray(action, dtype=np.float32).reshape(-1)
+        if arr.size < 2:
+            raise ValueError("PPO model returned an invalid action shape")
+        return Action(
+            throttle=float(np.clip(arr[0], -1.0, 1.0)),
+            steering=float(np.clip(arr[1], -1.0, 1.0)),
+        )
+
+
 def list_model_architectures() -> list[str]:
     return ["linear", "tiny_mlp"]
 
 
+def _grid_shape_for_maps(map_names: list[str]) -> tuple[int, int]:
+    max_width = 0.0
+    max_height = 0.0
+    resolution = 8.0
+    for map_name in map_names:
+        world = build_world(map_name)
+        max_width = max(max_width, world.width)
+        max_height = max(max_height, world.height)
+    return int(max_height // resolution) + 1, int(max_width // resolution) + 1
+
+
+def _load_ppo_policy_model(path: str) -> PPOPolicyModel:
+    model_path = Path(path)
+    config_path = model_path.with_name("train_config.json")
+    allowed_maps: list[str] = ["default"]
+    grid_shape = (57, 101)
+    if config_path.exists():
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+        raw_maps = payload.get("allowed_maps", ["default"])
+        allowed_maps = [str(map_name) for map_name in raw_maps]
+        raw_grid_shape = payload.get("target_grid_shape")
+        if isinstance(raw_grid_shape, list) and len(raw_grid_shape) == 2:
+            grid_shape = (int(raw_grid_shape[0]), int(raw_grid_shape[1]))
+        else:
+            grid_shape = _grid_shape_for_maps(allowed_maps)
+    model = load_rl_model(path, algorithm="ppo")
+    return PPOPolicyModel(model=model, allowed_maps=tuple(allowed_maps), grid_shape=grid_shape)
+
+
 def load_policy_model(path: str) -> PolicyModel:
+    if Path(path).suffix == ".zip":
+        return _load_ppo_policy_model(path)
+
     data = np.load(path)
     model_type = "linear"
     if "model_type" in data:

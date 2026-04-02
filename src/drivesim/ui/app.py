@@ -36,7 +36,7 @@ def run_app() -> None:
         env = DriveSimEnv(EnvConfig(mapping_mode=start_mapping_mode))
     else:
         env = DriveSimEnv()
-    agent = AssistAgent()
+    agent = AssistAgent(AssistAgent.default_model_path())
     logger = ReplayLogger()
 
     state = env.sim.get_state()
@@ -97,8 +97,9 @@ def run_app() -> None:
                 elif event.key == pygame.K_h:
                     show_help = not show_help
                 elif event.key == pygame.K_p:
-                    trainer.best_model().policy.save(agent.model_path)
-                    agent = AssistAgent(agent.model_path)
+                    save_path = agent.writable_model_path()
+                    trainer.best_model().policy.save(save_path)
+                    agent = AssistAgent(save_path)
                 elif event.key == pygame.K_m:
                     current_map = (current_map + 1) % len(maps)
                     env.set_map(maps[current_map])

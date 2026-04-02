@@ -310,6 +310,7 @@ class DriveSimEnv:
             "lidar": np.array(obs.distances, dtype=np.float32),
             "lidar_front": [float(v) for v in front_slice],
             "collided": state.collided,
+            "map_name": self.map_name,
         }
 
     def _compute_path_world(self, grid: np.ndarray, state: SimState) -> list[tuple[float, float]]:

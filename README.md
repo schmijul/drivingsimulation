@@ -87,6 +87,12 @@ Start directly in assistant mode + 3D camera:
 DRIVESIM_START_MODE=assistant DRIVESIM_START_VIEW=3d drivesim-run
 ```
 
+Start assistant mode with a PPO checkpoint from `train-rl`:
+
+```bash
+DRIVESIM_ASSIST_MODEL=models/rl/<run>/model.zip DRIVESIM_START_MODE=assistant drivesim-run
+```
+
 Start with sensor-driven occupancy mapping:
 
 ```bash
@@ -182,6 +188,9 @@ Each run writes a dedicated directory under `models/rl/` with:
 - `checkpoints/`
 - `train_config.json`
 - `eval.json`
+
+The resulting `model.zip` can also be loaded by the UI assistant via `DRIVESIM_ASSIST_MODEL`.
+If you switch to a map outside the checkpoint's training map set, the assistant falls back to the built-in heuristic instead of crashing.
 
 ## One-command trainer for anyone (recommended)
 If you want a reliable default pipeline without hand-tuning, use the BC+DAgger trainer:
